@@ -248,104 +248,20 @@ output_winner(B) :-
     write('No winner.')
     .
 
+% Affiche une ligne de la matrice
+output_line([]) :- nl. % Quand la ligne est vide, saute une ligne.
+output_line([X|Xs]) :-
+    write(X), % Affiche le contenu de la case (X, O, ou _).
+    write('|'), % Ajoute un séparateur vertical.
+    output_line(Xs). % Continue avec le reste de la ligne.
 
-output_board(B) :-
-    nl,
-    nl,
-    output_square(B,1),
-    write('|'),
-    output_square(B,2),
-    write('|'),
-    output_square(B,3),
-    write('|'),
-    output_square(B,4),
-    write('|'),
-    output_square(B,5),
-    write('|'),
-    output_square(B,6),
-    write('|'),
-    output_square(B,7),
-    nl,
-    write('-----------'),
-    nl,
-    output_square(B,8),
-    write('|'),
-    output_square(B,9),
-    write('|'),
-    output_square(B,10),
-    write('|'),
-    output_square(B,11),
-    write('|'),
-    output_square(B,12),
-    write('|'),
-    output_square(B,13),
-    write('|'),
-    output_square(B,14),
-    nl,
-    write('-----------'),
-    nl,
-    output_square(B,15),
-    write('|'),
-    output_square(B,16),
-    write('|'),
-    output_square(B,17),
-    write('|'),
-    output_square(B,18),
-    write('|'),
-    output_square(B,19),
-    write('|'),
-    output_square(B,20),
-    write('|'),
-    output_square(B,21),
-    nl,
-    write('-----------'),
-    nl,
-    output_square(B,22),
-    write('|'),
-    output_square(B,23),
-    write('|'),
-    output_square(B,24),
-    write('|'),
-    output_square(B,25),
-    write('|'),
-    output_square(B,26),
-    write('|'),
-    output_square(B,27),
-    write('|'),
-    output_square(B,28),
-    nl,
-    write('-----------'),
-    nl,
-    output_square(B,29),
-    write('|'),
-    output_square(B,30),
-    write('|'),
-    output_square(B,31),
-    write('|'),
-    output_square(B,32),
-    write('|'),
-    output_square(B,33),
-    write('|'),
-    output_square(B,34),
-    write('|'),
-    output_square(B,35),
-    nl,
-    write('-----------'),
-    nl,
-    output_square(B,36),
-    write('|'),
-    output_square(B,37),
-    write('|'),
-    output_square(B,38),
-    write('|'),
-    output_square(B,39),
-    write('|'),
-    output_square(B,40),
-    write('|'),
-    output_square(B,41),
-    write('|'),
-    output_square(B,42),!
-    .
+% Affiche tout le plateau
+output_board([]). % Quand il n y a plus de lignes termine
+output_board([Row|Rows]) :-
+    output_line(Row), % Affiche la ligne courante.
+    write('---------------------'), nl, % Ligne de séparation (6 colonnes).
+    output_board(Rows). % Continue avec les autres lignes.
+
 
 output_board :-
     board(B),
@@ -380,3 +296,152 @@ output_value(D,S,U) :-
 output_value(D,S,U) :-
     true
     .
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% PSEUDO-RANDOM NUMBERS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%.......................................
+% random_seed
+%.......................................
+% Initialize the random number generator...
+% If no seed is provided, use the current time
+%
+
+random_seed :-
+    random_seed(_),
+    !
+    .
+
+random_seed(N) :-
+    nonvar(N),
+% Do nothing, SWI-Prolog does not support seeding the random number generator
+    !
+    .
+
+random_seed(N) :-
+    var(N),
+% Do nothing, SWI-Prolog does not support seeding the random number generator
+    !
+    .
+
+/*****************************************
+ OTHER COMPILER SUPPORT
+******************************************
+
+arity_prolog___random_seed(N) :-
+    nonvar(N),
+    randomize(N),
+    !
+    .
+
+arity_prolog___random_seed(N) :-
+    var(N),
+    time(time(Hour,Minute,Second,Tick)),
+    N is ( (Hour+1) * (Minute+1) * (Second+1) * (Tick+1)),
+    randomize(N),
+    !
+    .
+
+******************************************/
+
+
+
+%.......................................
+% random_int_1n
+%.......................................
+% returns a random integer from 1 to N
+%
+random_int_1n(N, V) :-
+    V is random(N) + 1,
+    !
+    .
+
+/*****************************************
+ OTHER COMPILER SUPPORT
+******************************************
+
+arity_prolog___random_int_1n(N, V) :-
+    R is random,
+    V2 is (R * N) - 0.5,
+    float_text(V2,V3,fixed(0)),
+    int_text(V4,V3),
+    V is V4 + 1,
+    !
+    .
+
+******************************************/
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% LIST PROCESSING
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+member([V|T], V).
+member([_|T], V) :- member(T,V).
+
+append([], L, L).
+append([H|T1], L2, [H|T3]) :- append(T1, L2, T3).
+
+
+%.......................................
+% set_item
+%.......................................
+% Given a list L, replace the item at position N with V
+% return the new list in list L2
+%
+
+set_item(L, N, V, L2) :-
+    set_item2(L, N, V, 1, L2)
+        .
+
+set_item2( [], N, V, A, L2) :-
+    N == -1,
+    L2 = []
+    .
+
+set_item2( [_|T1], N, V, A, [V|T2] ) :-
+    A = N,
+    A1 is N + 1,
+    set_item2( T1, -1, V, A1, T2 )
+    .
+
+set_item2( [H|T1], N, V, A, [H|T2] ) :-
+    A1 is A + 1,
+    set_item2( T1, N, V, A1, T2 )
+    .
+
+
+%.......................................
+% get_item
+%.......................................
+% Given a list L, retrieve the item at position N and return it as value V
+%
+
+get_item(L, N, V) :-
+    get_item2(L, N, 1, V)
+    .
+
+get_item2( [], _N, _A, V) :-
+    V = [], !,
+    fail
+        .
+
+get_item2( [H|_T], N, A, V) :-
+    A = N,
+    V = H
+    .
+
+get_item2( [_|T], N, A, V) :-
+    A1 is A + 1,
+    get_item2( T, N, A1, V)
+    .
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% End of program
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
