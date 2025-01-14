@@ -212,3 +212,171 @@ play(P) :-
     play(P2), !
     .
 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% OUTPUT
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+output_players :-
+    nl,
+    player(1, V1),
+    write('Player 1 is '),   %%% either human or computer
+    write(V1),
+
+    nl,
+    player(2, V2),
+    write('Player 2 is '),   %%% either human or computer
+    write(V2),
+    !
+    .
+
+
+output_winner(B) :-
+    win(B,x),
+    write('X wins.'),
+    !
+    .
+
+output_winner(B) :-
+    win(B,o),
+    write('O wins.'),
+    !
+    .
+
+output_winner(B) :-
+    write('No winner.')
+    .
+
+
+output_board(B) :-
+    nl,
+    nl,
+    output_square(B,1),
+    write('|'),
+    output_square(B,2),
+    write('|'),
+    output_square(B,3),
+    write('|'),
+    output_square(B,4),
+    write('|'),
+    output_square(B,5),
+    write('|'),
+    output_square(B,6),
+    write('|'),
+    output_square(B,7),
+    nl,
+    write('-----------'),
+    nl,
+    output_square(B,8),
+    write('|'),
+    output_square(B,9),
+    write('|'),
+    output_square(B,10),
+    write('|'),
+    output_square(B,11),
+    write('|'),
+    output_square(B,12),
+    write('|'),
+    output_square(B,13),
+    write('|'),
+    output_square(B,14),
+    nl,
+    write('-----------'),
+    nl,
+    output_square(B,15),
+    write('|'),
+    output_square(B,16),
+    write('|'),
+    output_square(B,17),
+    write('|'),
+    output_square(B,18),
+    write('|'),
+    output_square(B,19),
+    write('|'),
+    output_square(B,20),
+    write('|'),
+    output_square(B,21),
+    nl,
+    write('-----------'),
+    nl,
+    output_square(B,22),
+    write('|'),
+    output_square(B,23),
+    write('|'),
+    output_square(B,24),
+    write('|'),
+    output_square(B,25),
+    write('|'),
+    output_square(B,26),
+    write('|'),
+    output_square(B,27),
+    write('|'),
+    output_square(B,28),
+    nl,
+    write('-----------'),
+    nl,
+    output_square(B,29),
+    write('|'),
+    output_square(B,30),
+    write('|'),
+    output_square(B,31),
+    write('|'),
+    output_square(B,32),
+    write('|'),
+    output_square(B,33),
+    write('|'),
+    output_square(B,34),
+    write('|'),
+    output_square(B,35),
+    nl,
+    write('-----------'),
+    nl,
+    output_square(B,36),
+    write('|'),
+    output_square(B,37),
+    write('|'),
+    output_square(B,38),
+    write('|'),
+    output_square(B,39),
+    write('|'),
+    output_square(B,40),
+    write('|'),
+    output_square(B,41),
+    write('|'),
+    output_square(B,42),!
+    .
+
+output_board :-
+    board(B),
+    output_board(B), !
+    .
+
+output_square(B,S) :-
+    square(B,S,M),
+    write(' '),
+    output_square2(S,M),
+    write(' '), !
+    .
+
+output_square2(S, E) :-
+    blank_mark(E),
+    write(S), !              %%% if square is empty, output the square number
+    .
+
+output_square2(S, M) :-
+    write(M), !              %%% if square is marked, output the mark
+    .
+
+output_value(D,S,U) :-
+    D == 1,
+    nl,
+    write('Square '),
+    write(S),
+    write(', utility: '),
+    write(U), !
+    .
+
+output_value(D,S,U) :-
+    true
+    .
