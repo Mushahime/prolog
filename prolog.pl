@@ -17,7 +17,7 @@ hello :-
     nl,
     nl,
     nl,
-    write('Welcome to Tic-Tac-Toe.'),
+    write('Welcome to Connect 4.'),
     read_players,
     output_players
     .
@@ -25,7 +25,7 @@ hello :-
 initialize :-
     random_seed,          %%% use current time to initialize random number generator
     blank_mark(E),
-    asserta( board([E,E,E, E,E,E, E,E,E]) )  %%% create a blank board
+    asserta( board([E,E,E,E,E,E,E, E,E,E,E,E,E,E, E,E,E,E,E,E,E, E,E,E,E,E,E,E, E,E,E,E,E,E,E, E,E,E,E,E,E,E]) )  %%% create a blank board
     .
 
 goodbye :-
