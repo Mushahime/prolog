@@ -15,7 +15,7 @@
 TODO
 
 ## A propos
-Project as part on courses of ALIA of INSA Lyon, developed by:
+Project as part on courses of ALIA of INSA Lyon, developed by:\n
 Theo CLOUSCARD
 Quentin MARIAT
 Noam CATHERINE
