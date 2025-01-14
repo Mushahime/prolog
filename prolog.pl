@@ -74,7 +74,7 @@ player_mark(2, 'o').
 opponent_mark(1, 'o').  %%% shorthand for the inverse mark of the given player
 opponent_mark(2, 'x').
 
-blank_mark('e').        %%% the mark used in an empty square
+blank_mark('_').        %%% the mark used in an empty square
 
 maximizing('x').        %%% the player playing x is always trying to maximize the utility of the board position
 minimizing('o').        %%% the player playing o is always trying to minimize the utility of the board position
@@ -95,10 +95,11 @@ corner_square(4, 42).
 run :-
     hello,          %%% Display welcome message, initialize game
 
-    play(1),        %%% Play the game starting with player 1
+    play(1)        %%% Play the game starting with player 1
 
     goodbye         %%% Display end of game message
     .
+
 
 run :-
     goodbye
@@ -121,6 +122,7 @@ initialize :-
     blank_mark(E),
     asserta( board([[E,E,E,E,E,E,E], [E,E,E,E,E,E,E], [E,E,E,E,E,E,E], [E,E,E,E,E,E,E], [E,E,E,E,E,E,E], [E,E,E,E,E,E,E]]) )  %%% create a blank board
     .
+
 
 goodbye :-
     board(B),
@@ -214,6 +216,252 @@ play(P) :-
 
 
 
+%.......................................
+% move
+%.......................................
+% applies a move on the given board
+% (put mark M in column S on board B and return the resulting board B2)
+%
+
+move(M,S,M,B2) :-
+    set_item(B,S,M,B2)
+    .
+
+
+%.......................................
+% game_over
+%.......................................
+% determines when the game is over
+%
+game_over(P, B) :-
+    game_over2(P, B)
+    .
+
+game_over2(P, B) :-
+    opponent_mark(P, M),   %%% game is over if opponent wins
+    win(B, M)
+    .
+
+game_over2(P, B) :-
+    blank_mark(E),
+    not(square(B,S,E))     %%% game is over if opponent wins
+    .
+
+
+%.......................................
+% make_move
+%.......................................
+% requests next move from human/computer,
+% then applies that move to the given board
+%
+
+make_move(P, B) :-
+    player(P, Type),
+
+    make_move2(Type, P, B, B2),
+
+    retract( board(_) ),
+    asserta( board(B2) )
+    .
+
+make_move2(human, P, B, B2) :-
+    nl,
+    nl,
+    write('Player '),
+    write(P),
+    write(' move? '),
+    read(S),
+
+    blank_mark(E),
+    square(B, S, E),
+    player_mark(P, M),
+    move(B, S, M, B2), !
+    .
+
+make_move2(human, P, B, B2) :-
+    nl,
+    nl,
+    write('Please select a numbered square.'),
+    make_move2(human,P,B,B2)
+    .
+
+make_move2(computer, P, B, B2) :-
+    nl,
+    nl,
+    write('Computer is thinking about next move...'),
+    player_mark(P, M),
+    minimax(0, B, M, S, U),
+    move(B,S,M,B2),
+
+    nl,
+    nl,
+    write('Computer places '),
+    write(M),
+    write(' in square '),
+    write(S),
+    write('.')
+    .
+
+
+%.......................................
+% moves
+%.......................................
+% retrieves a list of available moves (empty squares) on a board.
+%
+
+moves(B,L) :-
+    %not(win(B,x)),                %%% if either player already won, then there are no available moves
+    %not(win(B,o)),
+    blank_mark(E),
+    findall(N, square(B,N,E), L),
+    L \= []
+    .
+
+
+%.......................................
+% utility
+%.......................................
+% determines the value of a given board position
+%
+
+utility(B,U) :-
+    win(B,'x'),
+    U = 1,
+    !
+    .
+
+utility(B,U) :-
+    win(B,'o'),
+    U = (-1),
+    !
+    .
+
+utility(B,U) :-
+    U = 0
+    .
+
+
+%.......................................
+% minimax
+%.......................................
+% The minimax algorithm always assumes an optimal opponent.
+% For tic-tac-toe, optimal play will always result in a tie, so the algorithm is effectively playing not-to-lose.
+
+% For the opening move against an optimal player, the best minimax can ever hope for is a tie.
+% So, technically speaking, any opening move is acceptable.
+% Save the user the trouble of waiting  for the computer to search the entire minimax tree
+% by simply selecting a random square.
+
+minimax(D,[E,E,E, E,E,E, E,E,E],M,S,U) :-
+    blank_mark(E),
+    random_int_1n(9,S),
+    !
+    .
+
+minimax(D,B,M,S,U) :-
+    D2 is D + 1,
+    moves(B,L),          %%% get the list of available moves
+    !,
+    best(D2,B,M,L,S,U),  %%% recursively determine the best available move
+    !
+    .
+
+% if there are no more available moves,
+% then the minimax value is the utility of the given board position
+
+minimax(D,B,M,S,U) :-
+    utility(B,U)
+    .
+
+
+%.......................................
+% best
+%.......................................
+% determines the best move in a given list of moves by recursively calling minimax
+%
+
+% if there is only one move left in the list...
+
+best(D,B,M,[S1],S,U) :-
+    move(B,S1,M,B2),        %%% apply that move to the board,
+    inverse_mark(M,M2),
+    !,
+    minimax(D,B2,M2,_S,U),  %%% then recursively search for the utility value of that move.
+    S = S1, !,
+    output_value(D,S,U),
+    !
+    .
+
+% if there is more than one move in the list...
+
+best(D,B,M,[S1|T],S,U) :-
+    move(B,S1,M,B2),             %%% apply the first move (in the list) to the board,
+    inverse_mark(M,M2),
+    !,
+    minimax(D,B2,M2,_S,U1),      %%% recursively search for the utility value of that move,
+    best(D,B,M,T,S2,U2),         %%% determine the best move of the remaining moves,
+    output_value(D,S1,U1),
+    better(D,M,S1,U1,S2,U2,S,U)  %%% and choose the better of the two moves (based on their respective utility values)
+    .
+
+
+%.......................................
+% better
+%.......................................
+% returns the better of two moves based on their respective utility values.
+%
+% if both moves have the same utility value, then one is chosen at random.
+
+better(D,M,S1,U1,S2,U2,     S,U) :-
+    maximizing(M),                     %%% if the player is maximizing
+    U1 > U2,                           %%% then greater is better.
+    S = S1,
+    U = U1,
+    !
+    .
+
+better(D,M,S1,U1,S2,U2,     S,U) :-
+    minimizing(M),                     %%% if the player is minimizing,
+    U1 < U2,                           %%% then lesser is better.
+    S = S1,
+    U = U1,
+    !
+    .
+
+better(D,M,S1,U1,S2,U2,     S,U) :-
+    U1 == U2,                          %%% if moves have equal utility,
+    random_int_1n(10,R),               %%% then pick one of them at random
+    better2(D,R,M,S1,U1,S2,U2,S,U),
+    !
+    .
+
+better(D,M,S1,U1,S2,U2,     S,U) :-        %%% otherwise, second move is better
+    S = S2,
+    U = U2,
+    !
+    .
+
+
+%.......................................
+% better2
+%.......................................
+% randomly selects two squares of the same utility value given a single probability
+%
+
+better2(D,R,M,S1,U1,S2,U2,  S,U) :-
+    R < 6,
+    S = S1,
+    U = U1,
+    !
+    .
+
+better2(D,R,M,S1,U1,S2,U2,  S,U) :-
+    S = S2,
+    U = U2,
+    !
+    .
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% OUTPUT
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -228,6 +476,7 @@ output_players :-
     player(2, V2),
     write('Player 2 is '),   %%% either human or computer
     write(V2),
+    nl,
     !
     .
 
@@ -389,56 +638,44 @@ append([H|T1], L2, [H|T3]) :- append(T1, L2, T3).
 %.......................................
 % set_item
 %.......................................
+
+%Given a matrix M and a value V, set the value at position (Row, Column) to V.
+set_item(M, Column, V, M2) :-
+    transpose(M,M1),
+    set_item(M1, Column, V, M2).
+        
+
 % Given a list L, replace the item at position N with V
-% return the new list in list L2
+% return the new matrix in M2
 %
 
-set_item(L, N, V, L2) :-
-    set_item2(L, N, V, 1, L2)
-        .
+set_item([Row|Rest],Column,V,[NewRow|Rest]) :-
+    set_item2(Row,Column,V,NewRow).
 
-set_item2( [], N, V, A, L2) :-
-    N == -1,
-    L2 = []
-    .
-
-set_item2( [_|T1], N, V, A, [V|T2] ) :-
-    A = N,
-    A1 is N + 1,
-    set_item2( T1, -1, V, A1, T2 )
-    .
-
-set_item2( [H|T1], N, V, A, [H|T2] ) :-
-    A1 is A + 1,
-    set_item2( T1, N, V, A1, T2 )
-    .
-
+% Modifier une ligne (qui est une colonne dans la matrice transposée).
+set_item_row([H|T], 1, V, [V|T]).   % Si on est à la première position de la ligne (colonne d origine), on insère V.
+set_item_row([H|T], Column, V, [H|NewT]) :-
+    Column > 1,                    % Si la colonne n est pas 1, on descend de 1 dans la ligne.
+    Column1 is Column - 1,
+    set_item_row(T, Column1, V, NewT).
 
 %.......................................
 % get_item
 %.......................................
 % Given a list L, retrieve the item at position N and return it as value V
 %
+% Récupérer un élément à la position (Row, Column) de la matrice M.
 
-get_item(L, N, V) :-
-    get_item2(L, N, 1, V)
-    .
+get_item(M, Row, Column, V) :-
+    nth1(Row, M, RowList),          % On extrait la ligne correspondante (Row).
+    get_item_row(RowList, Column, V). % On cherche l élément dans cette ligne (RowList).
 
-get_item2( [], _N, _A, V) :-
-    V = [], !,
-    fail
-        .
-
-get_item2( [H|_T], N, A, V) :-
-    A = N,
-    V = H
-    .
-
-get_item2( [_|T], N, A, V) :-
-    A1 is A + 1,
-    get_item2( T, N, A1, V)
-    .
-
+% Récupérer un élément à la position (Column) dans la ligne donnée.
+get_item_row([H|_T], 1, H).          % Si la colonne est 1, on retourne l élément.
+get_item_row([_|T], Column, V) :-    % Sinon, on passe à l élément suivant.
+    Column > 1,
+    Column1 is Column - 1,
+    get_item_row(T, Column1, V).
 
 
 
