@@ -125,7 +125,8 @@ play(P) :-
 % Check for a win (horizontal, vertical, or diagonal)
 win(Board, Player) :-
     horizontal_win(Board, Player);
-    vertical_win(Board, Player).
+    vertical_win(Board, Player);
+    diagonal_win(Board, Player).
 
 % Check for a horizontal win
 horizontal_win(Board, Player) :-
@@ -137,11 +138,40 @@ vertical_win(Board, Player) :-
     transpose(Board, TransposedBoard), % Transpose the board to check columns
     horizontal_win(TransposedBoard, Player).
 
-% Check for a diagonal win
-%diagonal_win(Board, Player) :-
-    %diagonals(Board, Diagonals), % Extract all diagonals
-    %member(Diagonal, Diagonals),
-    %sublist([Player, Player, Player, Player], Diagonal).
+% Check for diagonal wins
+diagonal_win(Board, Player) :-
+    diagonal_win_right(Board, Player);
+    diagonal_win_left(Board, Player).
+
+% Check diagonal going down-right
+diagonal_win_right(Board, Player) :-
+    append(_, [Row1, Row2, Row3, Row4|_], Board),
+    append(Prefix1, [Player|_], Row1),
+    append(Prefix2, [Player|_], Row2),
+    append(Prefix3, [Player|_], Row3),
+    append(Prefix4, [Player|_], Row4),
+    length(Prefix1, N1),
+    length(Prefix2, N2),
+    length(Prefix3, N3),
+    length(Prefix4, N4),
+    N2 is N1 + 1,
+    N3 is N2 + 1,
+    N4 is N3 + 1.
+
+% Check diagonal going down-left
+diagonal_win_left(Board, Player) :-
+    append(_, [Row1, Row2, Row3, Row4|_], Board),
+    append(Prefix1, [Player|_], Row1),
+    append(Prefix2, [Player|_], Row2),
+    append(Prefix3, [Player|_], Row3),
+    append(Prefix4, [Player|_], Row4),
+    length(Prefix1, N1),
+    length(Prefix2, N2),
+    length(Prefix3, N3),
+    length(Prefix4, N4),
+    N2 is N1 - 1,
+    N3 is N2 - 1,
+    N4 is N3 - 1.
 
 % Check if a list contains a sublist
 sublist(Sublist, List) :-
@@ -159,16 +189,6 @@ transpose(Matrix, [Col|Cols]) :-
 first_column([], [], []).
 first_column([[H|T]|Rows], [H|Heads], [T|RestRows]) :-
     first_column(Rows, Heads, RestRows).
-
-% Extract all diagonals from a matrix
-%diagonals(Board, Diagonals) :-
-%    descending_diagonals(Board, DescendingDiagonals),
-%    ascending_diagonals(Board, AscendingDiagonals),
-%    append(DescendingDiagonals, AscendingDiagonals, Diagonals).
-
-% Extract all descending diagonals from a matrix
-%descending_diagonals(Board, Diagonals) :-
-%    descending_diagonals(Board, [], Diagonals).
 
 
 
