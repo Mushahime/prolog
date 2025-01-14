@@ -118,3 +118,58 @@ play(P) :-
     play(P2), !
     .
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% WIN CONDITIONS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Check for a win (horizontal, vertical, or diagonal)
+win(Board, Player) :-
+    horizontal_win(Board, Player);
+    vertical_win(Board, Player).
+
+% Check for a horizontal win
+horizontal_win(Board, Player) :-
+    member(Row, Board), % Check each row in the board
+    sublist([Player, Player, Player, Player], Row).
+
+% Check for a vertical win
+vertical_win(Board, Player) :-
+    transpose(Board, TransposedBoard), % Transpose the board to check columns
+    horizontal_win(TransposedBoard, Player).
+
+% Check for a diagonal win
+%diagonal_win(Board, Player) :-
+    %diagonals(Board, Diagonals), % Extract all diagonals
+    %member(Diagonal, Diagonals),
+    %sublist([Player, Player, Player, Player], Diagonal).
+
+% Check if a list contains a sublist
+sublist(Sublist, List) :-
+    append(_, Suffix, List), % Slice the List to get the suffix
+    append(Sublist, _, Suffix). % Check if Sublist is at the start of the suffix
+
+% Transpose a matrix (turn rows into columns)
+transpose([], []).
+transpose([[]|_], []).
+transpose(Matrix, [Col|Cols]) :-
+    first_column(Matrix, Col, RestMatrix),
+    transpose(RestMatrix, Cols).
+
+% Helper predicate to get the first column of a matrix
+first_column([], [], []).
+first_column([[H|T]|Rows], [H|Heads], [T|RestRows]) :-
+    first_column(Rows, Heads, RestRows).
+
+% Extract all diagonals from a matrix
+%diagonals(Board, Diagonals) :-
+%    descending_diagonals(Board, DescendingDiagonals),
+%    ascending_diagonals(Board, AscendingDiagonals),
+%    append(DescendingDiagonals, AscendingDiagonals, Diagonals).
+
+% Extract all descending diagonals from a matrix
+%descending_diagonals(Board, Diagonals) :-
+%    descending_diagonals(Board, [], Diagonals).
+
+
+
+
