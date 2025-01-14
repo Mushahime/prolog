@@ -95,7 +95,7 @@ corner_square(4, 42).
 run :-
     hello,          %%% Display welcome message, initialize game
 
-    play(1)        %%% Play the game starting with player 1
+    play(1),        %%% Play the game starting with player 1
 
     goodbye         %%% Display end of game message
     .
@@ -476,6 +476,7 @@ output_players :-
     player(2, V2),
     write('Player 2 is '),   %%% either human or computer
     write(V2),
+    nl,
     nl,
     !
     .
