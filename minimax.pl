@@ -1,3 +1,85 @@
+% game_over(+Board, -Winner)
+% Succeeds if there's a winner or it's a draw.
+% Winner can be 'r' for Red, 'y' for Yellow, or 'draw'.
+game_over(Board, Winner) :-
+    ( winner(Board, r) -> Winner = r
+    ; winner(Board, y) -> Winner = y
+    ; board_full(Board) -> Winner = draw
+    ), !.
+
+% board_full(+Board)
+% True if no empty cells remain in top row
+board_full(Board) :-
+    \+ valid_moves(Board, _).  % If no valid moves, board is full.
+
+% winner(+Board, +Player)
+% True if Player has 4 in a row somewhere on the board.
+winner(Board, Player) :-
+    % Typically you'd check all 4-in-a-row patterns:
+    ( horizontal_win(Board, Player)
+    ; vertical_win(Board, Player)
+    ; diagonal_win(Board, Player)
+    ).
+
+% (Implementation details for checking horizontal_win/2, vertical_win/2, 
+%  and diagonal_win/2 are omitted here for brevity but typically involve
+%  scanning for sequences of four identical pieces.)
+
+
+
+
+
+% evaluate_board(+Board, +Player, -Score)
+% Returns a heuristic Score from Player's perspective.
+evaluate_board(Board, Player, Score) :-
+    ( game_over(Board, Winner) ->
+        terminal_score(Winner, Player, Score)
+    ; basic_heuristic(Board, Player, Score)
+    ).
+
+% terminal_score(+Winner, +Player, -Score)
+% If Winner = Player => large positive, if draw => 0, else large negative
+terminal_score(draw, _, 0) :- !.
+terminal_score(Winner, Player, 10000) :- Winner = Player, !.
+terminal_score(_, _, -10000).  % Lost
+
+% basic_heuristic(+Board, +Player, -Score)
+basic_heuristic(Board, Player, Score) :-
+    center_score(Board, Player, CenterVal),
+    % You could add more partial scores here, e.g., 
+    % two_in_a_rows(Board, Player, TwoVal), 
+    % three_in_a_rows(Board, Player, ThreeVal),
+    Score is CenterVal.
+
+% center_score(+Board, +Player, -CenterVal)
+% Count how many pieces the Player has in the center column (col = 3).
+% Subtract how many pieces the opponent has in col = 3.
+center_score(Board, Player, CenterVal) :-
+    opponent(Player, Opp),
+    count_in_column(Board, 3, Player, PlayerCount),
+    count_in_column(Board, 3, Opp, OppCount),
+    % Weight center advantage; e.g. each piece is worth 4 points
+    CenterVal is (PlayerCount - OppCount) * 4.
+
+% count_in_column(+Board, +Col, +Piece, -Count)
+count_in_column(Board, Col, Piece, Count) :-
+    findall(_, (
+        nth0(Row, Board, RowList),
+        nth0(Col, RowList, Cell),
+        Cell = Piece
+    ), Bag),
+    length(Bag, Count).
+
+% opponent(+Player, -Opp)
+% Switch between 'r' and 'y', or however you designate your players.
+opponent(r, y).
+opponent(y, r).
+
+
+
+
+
+
 /*************************************
  * choose_move/4
  *************************************/
