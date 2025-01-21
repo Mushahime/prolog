@@ -60,6 +60,12 @@ set_players(2) :-
     asserta(player(1, human)),
     asserta(player(2, human)), !.
 
+set_players(_) :-
+    nl,
+    write('Please enter 0, 1, or 2.'),
+    read_players
+    .
+
 human_playing(M) :-
     retractall(player(_,_)),
     (M == 'R' ; M == 'r'),
@@ -71,6 +77,11 @@ human_playing(M) :-
     (M == 'Y' ; M == 'y'),
     asserta(player(1, computer)),
     asserta(player(2, human)), !.
+
+human_playing(_) :-
+    nl,
+    write('Please enter r or y.'),
+    set_players(1).
 
 % Improved board display
 display_board(Board) :-
