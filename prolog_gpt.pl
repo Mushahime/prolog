@@ -11,19 +11,20 @@ blank_mark('_').
 opponent_mark('R', 'Y').
 opponent_mark('Y', 'R').
 
-% Optionally, link player IDs to marks (for reading a human's choice, etc.)
+% Optionally, link player IDs to marks
 player_mark(1, 'R').
 player_mark(2, 'Y').
 
-% If you want to set a maximum search depth:
+% If you want to set a maximum search depth for minimax:
 max_depth(8).
 
-% Preferred column ordering for AI:
+% Preferred column ordering for AI (used in find_winning_move/block and minimax):
 ordered_columns([4,3,5,2,6,1,7]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 2. Main Entry Point
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 run :-
     initialize_board,
     nl, write('Welcome to Connect 4!'), nl,
@@ -314,21 +315,60 @@ board_full(Board) :-
     \+ (member(Row, Board), member(B, Row)).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% 10. Minimax (Negamax) AI
+% 10. Blocking and Winning Move Checks
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Find an immediate winning move for Mark
+find_winning_move(Board, Mark, Col) :-
+    ordered_columns(Cols),
+    member(Col, Cols),
+    valid_move(Board, Col),
+    drop_piece(Board, Col, Mark, TempBoard),
+    player_mark(PID, Mark),  % We only need Mark to be known but ensure it belongs to some PID
+    check_win(TempBoard, PID),
+    !.
+
+% Find a move that blocks the opponent from an immediate win
+% (i.e., if the opponent can play this column next turn and win, we place our piece there now).
+find_block_move(Board, OpponentMark, Col) :-
+    ordered_columns(Cols),
+    member(Col, Cols),
+    valid_move(Board, Col),
+    drop_piece(Board, Col, OpponentMark, TempBoard),
+    player_mark(OppID, OpponentMark),
+    check_win(TempBoard, OppID),
+    !.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 11. Minimax (Negamax) AI
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % choose_computer_move(+Mark, -BestCol)
-% Mark is 'R' or 'Y'.
+% Mark is 'R' or 'Y'. This is the main entry for the AI's move.
 choose_computer_move(Mark, BestCol) :-
     board(Board),
-    max_depth(MaxD),
-    ordered_columns(OrderedCols),
-    Alpha is -1000000,
-    Beta  is  1000000,
-    write('Starting minimax computation...'), nl,
-    minimax(Board, MaxD, Alpha, Beta, Mark, OrderedCols, BestCol, Score),
-    write('Selected column '), write(BestCol), 
-    write(' with score '), write(Score), nl.
+    opponent_mark(Mark, OppMark),
+
+    % 1) Check if we (Mark) can win immediately:
+    ( find_winning_move(Board, Mark, WinCol) ->
+        BestCol = WinCol,
+        write('Computer goes for the WIN in column '), write(BestCol), nl
+
+    % 2) Otherwise, see if the opponent can win next turn, and block:
+    ; find_block_move(Board, OppMark, BlockCol) ->
+        BestCol = BlockCol,
+        write('Computer blocks opponent by playing column '), write(BlockCol), nl
+
+    % 3) If no immediate win or block needed, fall back to minimax:
+    ; max_depth(MaxD),
+      ordered_columns(OrderedCols),
+      Alpha is -1000000,
+      Beta  is  1000000,
+      write('Starting minimax computation...'), nl,
+      minimax(Board, MaxD, Alpha, Beta, Mark, OrderedCols, BestCol, Score),
+      write('Selected column '), write(BestCol),
+      write(' with score '), write(Score), nl
+    ).
 
 % minimax(+Board, +Depth, +Alpha, +Beta, +Mark, +Cols, -BestCol, -BestScore)
 % Negamax approach with alpha-beta pruning
@@ -361,24 +401,24 @@ minimax(Board, Depth, Alpha, Beta, Mark, [Col|RestCols], BestCol, BestScore) :-
             BestScore = TempS
           )
         )
-      ; % If we cannot make a move in Col, skip
+      ; % If we cannot make a move in Col, skip it
         minimax(Board, Depth, Alpha, Beta, Mark, RestCols, BestCol, BestScore)
     ).
 
 % A helper to "simulate" making a move, returning the new board,
-% without actually updating `board/1` in the DB.
+% without actually updating `board/1`.
 make_move_temp(Board, Col, Mark, NewBoard) :-
     valid_move(Board, Col),
     drop_piece(Board, Col, Mark, NewBoard).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% 11. Position Evaluation
+% 12. Position Evaluation
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 evaluate_position(Board, Mark, Score) :-
     opponent_mark(Mark, OppMark),
-    ( check_win(Board, Mark) ->
+    ( check_immediate_win(Board, Mark) ->
         Score = 100000
-    ; check_win(Board, OppMark) ->
+    ; check_immediate_win(Board, OppMark) ->
         Score = -100000
     ;
         evaluate_lines(Board, Mark, MyLines),
@@ -386,6 +426,11 @@ evaluate_position(Board, Mark, Score) :-
         evaluate_center(Board, Mark, CenterVal),
         Score is MyLines - TheirLines + CenterVal
     ).
+
+% Helper: check if a given Mark is already winning in Board
+check_immediate_win(Board, Mark) :-
+    player_mark(PID, Mark),
+    check_win(Board, PID).
 
 % Evaluate lines: sums partial scores for all 4-length sublines
 evaluate_lines(Board, Mark, TotalScore) :-
@@ -422,13 +467,13 @@ count_pieces(Line, X, Count) :-
 % Extra center column preference
 evaluate_center(Board, Mark, Val) :-
     transpose_board(Board, TBoard),
-    nth1(4, TBoard, CenterCol),   % 4 is center col in 7-wide
+    nth1(4, TBoard, CenterCol),   % Column 4 is center in a 7-wide board
     include(=(Mark), CenterCol, Hits),
     length(Hits, Count),
     Val is Count * 3.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% 12. Gathering 4-length lines: horizontal, vertical, diagonal
+% 13. Gathering 4-length lines: horizontal, vertical, diagonal
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 get_horizontal_line(Board, Subline) :-
@@ -467,7 +512,6 @@ build_down_right(Board, R, C, [Cell|Rest]) :-
     R2 is R+1, C2 is C+1,
     build_down_right(Board, R2, C2, Rest).
 build_down_right(_, R, C, []) :-
-    % once we fail to get_cell, we end
     \+ get_cell(_, R, C, _).
 
 % diag_up_right finds all "up-right" diagonals
@@ -497,7 +541,7 @@ get_cell(Board, Row, Col, Cell) :-
     nth1(Col, RowList, Cell).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% 13. transpose_board/2
+% 14. transpose_board/2
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 transpose_board([], []).
