@@ -1,4 +1,8 @@
 % Basic facts
+
+write_red(X) :- write('\e[31m'), write(X), write('\e[0m').
+write_yellow(X) :- write('\e[33m'), write(X), write('\e[0m').
+
 next_player(1, 2).
 next_player(2, 1).
 
@@ -52,7 +56,7 @@ set_players(0) :-
     asserta(player(2, computer)), !.
 
 set_players(1) :-
-    nl, write('Play with Red or Yellow (R/Y)? '),
+    nl, write('Play with Red or Yellow (r/y)? '),
     read(M),
     human_playing(M), !.
 
@@ -69,19 +73,19 @@ set_players(_) :-
 
 human_playing(M) :-
     retractall(player(_,_)),
-    (M == 'R' ; M == 'r'),
-    asserta(player(1, human)),
-    asserta(player(2, computer)), !.
+    (M == 'r'),
+        asserta(player(1, human)),
+        asserta(player(2, computer)), !.
 
 human_playing(M) :-
     retractall(player(_,_)),
-    (M == 'Y' ; M == 'y'),
+    (M == 'y'),
     asserta(player(1, computer)),
     asserta(player(2, human)), !.
 
 human_playing(_) :-
     nl,
-    write('Please enter r or y.'),
+    write('Please enter r/R or y/Y.'),
     set_players(1).
 
 % Improved board display
@@ -98,24 +102,30 @@ display_rows([Row|Rest], RowNum) :-
     NextRow is RowNum + 1,
     display_rows(Rest, NextRow).
 
+display_cell(X) :-
+    (X = 'R' -> write_red(X) ;
+     X = 'Y' -> write_yellow(X) ;
+     write(X)).
+
 display_row([]).
 display_row([Cell|Rest]) :-
-    write(Cell), write(' '),
+    display_cell(Cell), write(' '),
     display_row(Rest).
 
 play(P) :-
     board(B),
     display_board(B),
+    write(P), write('\'s turn'), nl,
     make_move(P),
     board(NewB),
     nl,
     (contains_mark(NewB) ->  % Vérifie si le plateau contient au moins une marque de joueur
         (check_win(NewB, P) ->
-            player_mark(P, Mark),
-            write('Player '), write(Mark), write(' wins!'), nl,
             display_board(NewB),  % Display the final board
-            nl,
-            ask_play_again(P)
+            write('Player '), write(P), write(' wins!'), nl,
+            write('Play again? (y/n): '),
+            read(Answer),
+            (Answer == 'y' -> replay(P) ; true)
         ; board_full(NewB) ->
             write('Game is a draw!'), nl,
             display_board(NewB),  % Display the final board
@@ -339,6 +349,3 @@ choose_computer_move(_, Col) :-
     repeat,
     random_between(1, 7, Col),
     valid_move(Col), !.
-
-
-%%%%%%%%%%%%%%%% JUST IN CASE %%%%%%%%%%%%%%%%
