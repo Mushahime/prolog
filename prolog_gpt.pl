@@ -111,15 +111,11 @@ play(P) :-
         (check_win(NewB, P) ->
             write('Player '), write(P), write(' wins!'), nl,
             display_board(NewB),  % Display the final board
-            write('Play again? (y/n): '),
-            read(Answer),
-            (Answer == 'y' -> replay(P) ; true)
+            ask_play_again(P)
         ; board_full(NewB) ->
             write('Game is a draw!'), nl,
             display_board(NewB),  % Display the final board
-            write('Play again? (y/n): '),
-            read(Answer),
-            (Answer == 'y' -> replay(P) ; true)
+            ask_play_again(P)
         ;
             next_player(P, P2),
             play(P2)
@@ -127,6 +123,13 @@ play(P) :-
     ; next_player(P, P2),
       play(P2)
     ).
+
+ask_play_again(P) :-
+    write('Play again? (y/n): '),
+    read(Answer),
+    (Answer == 'y' -> replay(P) 
+    ; Answer == 'n' -> write('Goodbye!'), nl 
+    ; write('Please enter y or n.'), nl, ask_play_again(P)).
 
 contains_mark(Board) :-
     player_mark(_, Mark),
@@ -137,6 +140,8 @@ replay(P) :-
     initialize,
     read_players,
     play(P).
+
+
 
 % Move management
 make_move(P) :-
