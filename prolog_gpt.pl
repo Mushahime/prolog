@@ -219,39 +219,40 @@ check_vertical_win(Board, Mark) :-
     member(Col, Transposed),
     four_consecutive(Col, Mark).
 
-% Diagonal win check
+% Check for diagonal wins
 check_diagonal_win(Board, Mark) :-
-    board_height(MaxRow),
-    board_width(MaxCol),
-    MaxRowMinus3 is MaxRow - 3,
-    MaxColMinus3 is MaxCol - 3,
-    (   % Diagonales descendantes (de gauche à droite)
-        between(1, MaxRowMinus3, Row),
-        between(1, MaxColMinus3, Col),
-        collect_diagonal_sequence(Board, Row, Col, 1, 1, 4, Diagonal),
-        four_consecutive(Diagonal, Mark)
-    ;   % Diagonales montantes (de gauche à droite)
-        between(4, MaxRow, Row),
-        between(1, MaxColMinus3, Col),
-        collect_diagonal_sequence(Board, Row, Col, -1, 1, 4, Diagonal),
-        four_consecutive(Diagonal, Mark)
-    ).
+    diagonal_win_right(Board, Mark);
+    diagonal_win_left(Board, Mark).
 
-% Collecter une séquence diagonale
-collect_diagonal_sequence(Board, Row, Col, RowInc, ColInc, Length, Sequence) :-
-    collect_sequence(Board, Row, Col, RowInc, ColInc, Length, [], Sequence).
+% Check diagonal going down-right
+diagonal_win_right(Board, Mark) :-
+    append(_, [Row1, Row2, Row3, Row4|_], Board),
+    append(Prefix1, [Mark|_], Row1),
+    append(Prefix2, [Mark|_], Row2),
+    append(Prefix3, [Mark|_], Row3),
+    append(Prefix4, [Mark|_], Row4),
+    length(Prefix1, N1),
+    length(Prefix2, N2),
+    length(Prefix3, N3),
+    length(Prefix4, N4),
+    N2 is N1 + 1,
+    N3 is N2 + 1,
+    N4 is N3 + 1.
 
-collect_sequence(_, _, _, _, _, 0, Acc, Sequence) :- reverse(Acc, Sequence).
-collect_sequence(Board, Row, Col, RowInc, ColInc, Length, Acc, Sequence) :-
-    Length > 0,
-    (get_cell(Board, Row, Col, Cell) ->
-        NextRow is Row + RowInc,
-        NextCol is Col + ColInc,
-        NextLength is Length - 1,
-        collect_sequence(Board, NextRow, NextCol, RowInc, ColInc, NextLength, [Cell|Acc], Sequence)
-    ;
-        fail
-    ).
+% Check diagonal going down-left
+diagonal_win_left(Board, Mark) :-
+    append(_, [Row1, Row2, Row3, Row4|_], Board),
+    append(Prefix1, [Mark|_], Row1),
+    append(Prefix2, [Mark|_], Row2),
+    append(Prefix3, [Mark|_], Row3),
+    append(Prefix4, [Mark|_], Row4),
+    length(Prefix1, N1),
+    length(Prefix2, N2),
+    length(Prefix3, N3),
+    length(Prefix4, N4),
+    N2 is N1 - 1,
+    N3 is N2 - 1,
+    N4 is N3 - 1.
 
 four_consecutive(List, Mark) :-
     append(_, [Mark,Mark,Mark,Mark|_], List).
@@ -260,36 +261,7 @@ four_consecutive(List, Mark) :-
 board_height(6).
 board_width(7).
 
-% Get diagonal sequences
-get_diagonal_right(Board, Row, Col, Diagonal) :-
-    collect_diagonal_right(Board, Row, Col, [], Diagonal).
 
-collect_diagonal_right(Board, Row, Col, Acc, Diagonal) :-
-    (Row > 6 ; Col > 7) ->
-    reverse(Acc, Diagonal)
-    ;
-    (get_cell(Board, Row, Col, Cell) ->
-        NextRow is Row + 1,
-        NextCol is Col + 1,
-        collect_diagonal_right(Board, NextRow, NextCol, [Cell|Acc], Diagonal)
-    ;
-        reverse(Acc, Diagonal)
-    ).
-
-get_diagonal_left(Board, Row, Col, Diagonal) :-
-    collect_diagonal_left(Board, Row, Col, [], Diagonal).
-
-collect_diagonal_left(Board, Row, Col, Acc, Diagonal) :-
-    (Row > 6 ; Col < 1) ->
-    reverse(Acc, Diagonal)
-    ;
-    (get_cell(Board, Row, Col, Cell) ->
-        NextRow is Row + 1,
-        NextCol is Col - 1,
-        collect_diagonal_left(Board, NextRow, NextCol, [Cell|Acc], Diagonal)
-    ;
-        reverse(Acc, Diagonal)
-    ).
 
 % Helper to get cell safely
 get_cell(Board, Row, Col, Cell) :-
@@ -335,3 +307,72 @@ choose_computer_move(_, Col) :-
     repeat,
     random_between(1, 7, Col),
     valid_move(Col), !.
+
+
+%%%%%%%%%%%%%%%% JUST IN CASE %%%%%%%%%%%%%%%%
+
+
+# % Diagonal win check
+# check_diagonal_win(Board, Mark) :-
+#     board_height(MaxRow),
+#     board_width(MaxCol),
+#     MaxRowMinus3 is MaxRow - 3,
+#     MaxColMinus3 is MaxCol - 3,
+#     (   % Diagonales descendantes (de gauche à droite)
+#         between(1, MaxRowMinus3, Row),
+#         between(1, MaxColMinus3, Col),
+#         collect_diagonal_sequence(Board, Row, Col, 1, 1, 4, Diagonal),
+#         four_consecutive(Diagonal, Mark)
+#     ;   % Diagonales montantes (de gauche à droite)
+#         between(4, MaxRow, Row),
+#         between(1, MaxColMinus3, Col),
+#         collect_diagonal_sequence(Board, Row, Col, -1, 1, 4, Diagonal),
+#         four_consecutive(Diagonal, Mark)
+#     ).
+
+# % Collecter une séquence diagonale
+# collect_diagonal_sequence(Board, Row, Col, RowInc, ColInc, Length, Sequence) :-
+#     collect_sequence(Board, Row, Col, RowInc, ColInc, Length, [], Sequence).
+
+# collect_sequence(_, _, _, _, _, 0, Acc, Sequence) :- reverse(Acc, Sequence).
+# collect_sequence(Board, Row, Col, RowInc, ColInc, Length, Acc, Sequence) :-
+#     Length > 0,
+#     (get_cell(Board, Row, Col, Cell) ->
+#         NextRow is Row + RowInc,
+#         NextCol is Col + ColInc,
+#         NextLength is Length - 1,
+#         collect_sequence(Board, NextRow, NextCol, RowInc, ColInc, NextLength, [Cell|Acc], Sequence)
+#     ;
+#         fail
+#     ).
+
+# % Get diagonal sequences
+# get_diagonal_right(Board, Row, Col, Diagonal) :-
+#     collect_diagonal_right(Board, Row, Col, [], Diagonal).
+
+# collect_diagonal_right(Board, Row, Col, Acc, Diagonal) :-
+#     (Row > 6 ; Col > 7) ->
+#     reverse(Acc, Diagonal)
+#     ;
+#     (get_cell(Board, Row, Col, Cell) ->
+#         NextRow is Row + 1,
+#         NextCol is Col + 1,
+#         collect_diagonal_right(Board, NextRow, NextCol, [Cell|Acc], Diagonal)
+#     ;
+#         reverse(Acc, Diagonal)
+#     ).
+
+# get_diagonal_left(Board, Row, Col, Diagonal) :-
+#     collect_diagonal_left(Board, Row, Col, [], Diagonal).
+
+# collect_diagonal_left(Board, Row, Col, Acc, Diagonal) :-
+#     (Row > 6 ; Col < 1) ->
+#     reverse(Acc, Diagonal)
+#     ;
+#     (get_cell(Board, Row, Col, Cell) ->
+#         NextRow is Row + 1,
+#         NextCol is Col - 1,
+#         collect_diagonal_left(Board, NextRow, NextCol, [Cell|Acc], Diagonal)
+#     ;
+#         reverse(Acc, Diagonal)
+#     ).
