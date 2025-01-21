@@ -102,22 +102,41 @@ display_row([Cell|Rest]) :-
     write(Cell), write(' '),
     display_row(Rest).
 
-% Main game loop with fixed game over check
 play(P) :-
     board(B),
     display_board(B),
     make_move(P),
     board(NewB),
-    (check_win(NewB, P) ->
-        write('Player '), write(P), write(' wins!'), nl,
-        display_board(NewB)  % Display the final board
-    ; board_full(NewB) ->
-        write('Game is a draw!'), nl,
-        display_board(NewB)  % Display the final board
-    ;
-        next_player(P, P2),
-        play(P2)
+    (contains_mark(NewB) ->  % Vérifie si le plateau contient au moins une marque de joueur
+        (check_win(NewB, P) ->
+            write('Player '), write(P), write(' wins!'), nl,
+            display_board(NewB),  % Display the final board
+            write('Play again? (y/n): '),
+            read(Answer),
+            (Answer == 'y' -> replay(P) ; true)
+        ; board_full(NewB) ->
+            write('Game is a draw!'), nl,
+            display_board(NewB),  % Display the final board
+            write('Play again? (y/n): '),
+            read(Answer),
+            (Answer == 'y' -> replay(P) ; true)
+        ;
+            next_player(P, P2),
+            play(P2)
+        )
+    ; next_player(P, P2),
+      play(P2)
     ).
+
+contains_mark(Board) :-
+    player_mark(_, Mark),
+    member(Row, Board),
+    member(Mark, Row), !.
+
+replay(P) :-
+    initialize,
+    read_players,
+    play(P).
 
 % Move management
 make_move(P) :-
