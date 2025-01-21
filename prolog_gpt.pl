@@ -1,4 +1,8 @@
 % Basic facts
+
+write_red(X) :- write('\e[31m'), write(X), write('\e[0m').
+write_yellow(X) :- write('\e[33m'), write(X), write('\e[0m').
+
 next_player(1, 2).
 next_player(2, 1).
 
@@ -51,7 +55,7 @@ set_players(0) :-
     asserta(player(2, computer)), !.
 
 set_players(1) :-
-    nl, write('Play with Red or Yellow (R/Y)? '),
+    nl, write('Play with Red or Yellow (r/y)? '),
     read(M),
     human_playing(M), !.
 
@@ -68,19 +72,19 @@ set_players(_) :-
 
 human_playing(M) :-
     retractall(player(_,_)),
-    (M == 'R' ; M == 'r'),
-    asserta(player(1, human)),
-    asserta(player(2, computer)), !.
+    (M == 'r'),
+        asserta(player(1, human)),
+        asserta(player(2, computer)), !.
 
 human_playing(M) :-
     retractall(player(_,_)),
-    (M == 'Y' ; M == 'y'),
+    (M == 'y'),
     asserta(player(1, computer)),
     asserta(player(2, human)), !.
 
 human_playing(_) :-
     nl,
-    write('Please enter r or y.'),
+    write('Please enter r/R or y/Y.'),
     set_players(1).
 
 % Improved board display
@@ -97,20 +101,26 @@ display_rows([Row|Rest], RowNum) :-
     NextRow is RowNum + 1,
     display_rows(Rest, NextRow).
 
+display_cell(X) :-
+    (X = 'R' -> write_red(X) ;
+     X = 'Y' -> write_yellow(X) ;
+     write(X)).
+
 display_row([]).
 display_row([Cell|Rest]) :-
-    write(Cell), write(' '),
+    display_cell(Cell), write(' '),
     display_row(Rest).
 
 play(P) :-
     board(B),
     display_board(B),
+    write(P), write('\'s turn'), nl,
     make_move(P),
     board(NewB),
     (contains_mark(NewB) ->  % Vérifie si le plateau contient au moins une marque de joueur
         (check_win(NewB, P) ->
-            write('Player '), write(P), write(' wins!'), nl,
             display_board(NewB),  % Display the final board
+            write('Player '), write(P), write(' wins!'), nl,
             write('Play again? (y/n): '),
             read(Answer),
             (Answer == 'y' -> replay(P) ; true)
@@ -326,72 +336,3 @@ choose_computer_move(_, Col) :-
     repeat,
     random_between(1, 7, Col),
     valid_move(Col), !.
-
-
-%%%%%%%%%%%%%%%% JUST IN CASE %%%%%%%%%%%%%%%%
-
-
-# % Diagonal win check
-# check_diagonal_win(Board, Mark) :-
-#     board_height(MaxRow),
-#     board_width(MaxCol),
-#     MaxRowMinus3 is MaxRow - 3,
-#     MaxColMinus3 is MaxCol - 3,
-#     (   % Diagonales descendantes (de gauche à droite)
-#         between(1, MaxRowMinus3, Row),
-#         between(1, MaxColMinus3, Col),
-#         collect_diagonal_sequence(Board, Row, Col, 1, 1, 4, Diagonal),
-#         four_consecutive(Diagonal, Mark)
-#     ;   % Diagonales montantes (de gauche à droite)
-#         between(4, MaxRow, Row),
-#         between(1, MaxColMinus3, Col),
-#         collect_diagonal_sequence(Board, Row, Col, -1, 1, 4, Diagonal),
-#         four_consecutive(Diagonal, Mark)
-#     ).
-
-# % Collecter une séquence diagonale
-# collect_diagonal_sequence(Board, Row, Col, RowInc, ColInc, Length, Sequence) :-
-#     collect_sequence(Board, Row, Col, RowInc, ColInc, Length, [], Sequence).
-
-# collect_sequence(_, _, _, _, _, 0, Acc, Sequence) :- reverse(Acc, Sequence).
-# collect_sequence(Board, Row, Col, RowInc, ColInc, Length, Acc, Sequence) :-
-#     Length > 0,
-#     (get_cell(Board, Row, Col, Cell) ->
-#         NextRow is Row + RowInc,
-#         NextCol is Col + ColInc,
-#         NextLength is Length - 1,
-#         collect_sequence(Board, NextRow, NextCol, RowInc, ColInc, NextLength, [Cell|Acc], Sequence)
-#     ;
-#         fail
-#     ).
-
-# % Get diagonal sequences
-# get_diagonal_right(Board, Row, Col, Diagonal) :-
-#     collect_diagonal_right(Board, Row, Col, [], Diagonal).
-
-# collect_diagonal_right(Board, Row, Col, Acc, Diagonal) :-
-#     (Row > 6 ; Col > 7) ->
-#     reverse(Acc, Diagonal)
-#     ;
-#     (get_cell(Board, Row, Col, Cell) ->
-#         NextRow is Row + 1,
-#         NextCol is Col + 1,
-#         collect_diagonal_right(Board, NextRow, NextCol, [Cell|Acc], Diagonal)
-#     ;
-#         reverse(Acc, Diagonal)
-#     ).
-
-# get_diagonal_left(Board, Row, Col, Diagonal) :-
-#     collect_diagonal_left(Board, Row, Col, [], Diagonal).
-
-# collect_diagonal_left(Board, Row, Col, Acc, Diagonal) :-
-#     (Row > 6 ; Col < 1) ->
-#     reverse(Acc, Diagonal)
-#     ;
-#     (get_cell(Board, Row, Col, Cell) ->
-#         NextRow is Row + 1,
-#         NextCol is Col - 1,
-#         collect_diagonal_left(Board, NextRow, NextCol, [Cell|Acc], Diagonal)
-#     ;
-#         reverse(Acc, Diagonal)
-#     ).
