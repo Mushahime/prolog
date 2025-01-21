@@ -115,15 +115,16 @@ display_row([Cell|Rest]) :-
 play(P) :-
     board(B),
     display_board(B),
-    write(P), write('\'s turn'), nl,
     make_move(P),
     board(NewB),
     nl,
     (contains_mark(NewB) ->  % Vérifie si le plateau contient au moins une marque de joueur
         (check_win(NewB, P) ->
             display_board(NewB),  % Display the final board
-            write('Player '), write(P), write(' wins!'), nl,
-            write('Play again? (y/n): '),
+            nl,
+            write('Player '), write(P), write(' wins!'),
+            nl,
+            write('Play again? (y/n)'),
             read(Answer),
             (Answer == 'y' -> replay(P) ; true)
         ; board_full(NewB) ->
