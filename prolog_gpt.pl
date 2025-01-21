@@ -156,7 +156,7 @@ make_move(P) :-
     (Type = human ->
         player_mark(P, Mark),
         write('Player '), write(Mark),
-        write(' (column 1-7): '),
+        write(' (column 1-7)'),
         read(Col),
         make_human_move(Col, Mark)
     ;
