@@ -16,7 +16,7 @@ player_mark(1, 'R').
 player_mark(2, 'Y').
 
 % If you want to set a maximum search depth for minimax:
-max_depth(5).
+max_depth(4).
 
 % Preferred column ordering for AI (used in find_winning_move/block and minimax):
 ordered_columns([4,3,5,2,6,1,7]).
@@ -201,23 +201,21 @@ valid_move(Board, Col) :-
     blank_mark(B),
     nth1(Col, TopRow, B).  % top cell = '_'
 
-% drop_piece(+Board, +Col, +Mark, -NewBoard)
-% Place Mark into first blank cell from bottom
 drop_piece(Board, Col, Mark, NewBoard) :-
-    drop_piece_helper(Board, Col, Mark, 6, NewBoard).
+    drop_piece_helper(Board, Col, Mark, 6, NewBoard). % Commence à la rangée 6 (bas)
 
-drop_piece_helper(_, _, _, 0, _) :-
-    !, fail.  % column is full -> fail
+drop_piece_helper(_, _, _, 0, _) :- !, fail. % Échec si colonne pleine
 
 drop_piece_helper(Board, Col, Mark, Row, NewBoard) :-
     nth1(Row, Board, ThisRow),
     nth1(Col, ThisRow, Cell),
     blank_mark(B),
-    ( Cell = B ->
-        replace_nth(Board, Row, Col, Mark, NewBoard)
+    ( Cell = B -> 
+        replace_nth(Board, Row, Col, Mark, NewBoard) % Place en bas
       ; R2 is Row - 1,
-        drop_piece_helper(Board, Col, Mark, R2, NewBoard)
+        drop_piece_helper(Board, Col, Mark, R2, NewBoard) % Cherche en dessous
     ).
+
 
 % Helpers to replace row/col in nested lists
 replace_nth(Board, RowNum, ColNum, Mark, NewBoard) :-
@@ -265,9 +263,10 @@ display_cell(X)   :- write(X).               % '_'
 
 check_win(Board, PlayerID) :-
     player_mark(PlayerID, Mark),
-    ( check_horizontal_win(Board, Mark)
-    ; check_vertical_win(Board, Mark)
-    ; check_diagonal_win(Board, Mark)
+    ( 
+      check_horizontal_win(Board, Mark)
+      ; check_vertical_win(Board, Mark)
+      ; check_diagonal_win(Board, Mark)
     ).
 
 check_horizontal_win(Board, Mark) :-
@@ -283,11 +282,10 @@ check_diagonal_win(Board, Mark) :-
     board_dimensions(Board, Rows, Cols),
     between(1, Rows, Row),
     between(1, Cols, Col),
-    ( check_line(Board, Mark, Row, Col, 1, 1)   % Diagonale ↘
-    ; check_line(Board, Mark, Row, Col, -1, 1)  % Diagonale ↗
+    (check_line(Board, Mark, Row, Col, 1, 1)   % Diagonale ↘
+    ; check_line(Board, Mark, Row, Col, -1, 1) % Diagonale ↗
     ).
 
-% Vérifie 4 cases consécutives dans une direction (dRow, dCol)
 check_line(Board, Mark, Row, Col, DRow, DCol) :-
     get_cell(Board, Row, Col, Mark),
     R2 is Row + DRow, C2 is Col + DCol,
@@ -296,6 +294,17 @@ check_line(Board, Mark, Row, Col, DRow, DCol) :-
     get_cell(Board, R3, C3, Mark),
     R4 is R3 + DRow, C4 is C3 + DCol,
     get_cell(Board, R4, C4, Mark).
+
+diagonal_right(Board, Mark) :-
+    append(_, [R1,R2,R3,R4|_], Board),
+    append(P1,[Mark|_],R1),
+    append(P2,[Mark|_],R2),
+    append(P3,[Mark|_],R3),
+    append(P4,[Mark|_],R4),
+    length(P1,N1),
+    length(P2,N2), N2 is N1+1,
+    length(P3,N3), N3 is N2+1,
+    length(P4,N4), N4 is N3+1.
 
 diagonal_left(Board, Mark) :-
     append(_, [R1,R2,R3,R4|_], Board),
@@ -337,8 +346,7 @@ find_block_move(Board, OpponentMark, Col) :-
     valid_move(Board, Col),
     drop_piece(Board, Col, OpponentMark, TempBoard),
     player_mark(OppID, OpponentMark),
-    check_win(TempBoard, OppID),
-    !.
+    check_win(TempBoard, OppID), !.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 11. Minimax (Negamax) AI
@@ -388,10 +396,16 @@ evaluate_columns(Board, Mark, Cols, OrderedCols) :-
 
 % Score rapide basé sur le centre et les menaces immédiates
 column_potential(Board, Mark, Col, Score) :-
-    ( Col =:= 4 -> Base = 10 ; Base = 0 ),  % Bonus central
+    % Bonus central et adjacent
+    ( Col =:= 4 -> Base = 20 
+    ; (Col =:= 3 ; Col =:= 5) -> Base = 15 
+    ; (Col =:= 2 ; Col =:= 6) -> Base = 5
+    ; Base = 0 
+    ),
+    % Menaces immédiates
     ( valid_move(Board, Col),
       drop_piece(Board, Col, Mark, TempBoard),
-      check_immediate_win(TempBoard, Mark) -> Threat = 100
+      check_immediate_win(TempBoard, Mark) -> Threat = 50
     ; Threat = 0
     ),
     Score is Base + Threat.
@@ -453,27 +467,67 @@ make_move_temp(Board, Col, Mark, NewBoard) :-
 % evaluate_position/3
 evaluate_position(Board, Mark, Score) :-
     opponent_mark(Mark, OppMark),
-    ( check_immediate_win(Board, Mark) -> Score = 100000
-    ; check_immediate_win(Board, OppMark) -> Score = -100000
-    ; evaluate_threats(Board, Mark, ThreatScore),  % Nouveau score de menaces
-      evaluate_lines(Board, Mark, MyLines),
-      evaluate_lines(Board, OppMark, TheirLines),
-      evaluate_center(Board, Mark, CenterVal),
-      Score is MyLines - TheirLines + CenterVal + ThreatScore
+    ( check_immediate_win(Board, Mark) -> 
+        Score = 100000  % Victoire garantie
+    ; check_immediate_win(Board, OppMark) -> 
+        Score = -100000 % Défaite imminente
+    ; 
+        % Évaluation stratégique
+        evaluate_threats(Board, Mark, ThreatScore),
+        evaluate_lines(Board, Mark, MyLines),
+        evaluate_lines(Board, OppMark, TheirLines),
+        evaluate_center(Board, Mark, CenterVal),
+        
+        % Pondération des composantes
+        WeightedMyLines = MyLines,       
+        WeightedTheirLines = TheirLines, 
+        WeightedCenter = CenterVal * 3, 
+        
+        % Calcul final avec coefficients équilibrés
+        Score is WeightedMyLines - WeightedTheirLines + WeightedCenter + ThreatScore,
+        
+        % Sécurité numérique
+        (Score > 10000 -> Score = 10000
+        ; Score < -10000 -> Score = -10000
+        ; true)
     ).
 
 % Détecte les colonnes créant deux menaces gagnantes
-evaluate_threats(Board, Mark, ThreatScore) :-
-    findall(Col, (between(1,7,Col), creates_double_threat(Board, Mark, Col)), Threats),
-    length(Threats, N),
-    ThreatScore is N * 50.
+evaluate_threats(Board, Mark, Score) :-
+    findall(
+        Threat,
+        (between(1,7,Col),
+         valid_move(Board, Col),
+         simulate_move(Board, Col, Mark, ThreatValue),
+         Threat is ThreatValue),
+        Threats
+    ),
+    sum_list(Threats, Score).
 
-creates_double_threat(Board, Mark, Col) :-
+simulate_move(Board, Col, Mark, Threat) :-
+    drop_piece(Board, Col, Mark, NewBoard),
+    findall(
+        V,
+        (get_horizontal_line(NewBoard, Line),
+         offensive_score(Count, Blanks, V),
+         count_pieces(Line, Mark, Count),
+         count_pieces(Line, '_', Blanks)),
+        Values
+    ),
+    sum_list(Values, Threat).
+
+creates_any_threat(Board, Mark, Col) :-
     valid_move(Board, Col),
     drop_piece(Board, Col, Mark, NewBoard),
-    findall(Line, (get_horizontal_line(NewBoard, Line), four_consecutive(Line, Mark)), Wins),
-    length(Wins, Count),
-    Count >= 2.
+    (has_potential_win(NewBoard, Mark)).
+
+has_potential_win(Board, Mark) :-
+    (get_horizontal_line(Board, Line) ; get_vertical_line(Board, Line) ; get_diagonal_line(Board, Line)),
+    potential_three(Line, Mark).
+
+potential_three(Line, Mark) :-
+    count_pieces(Line, Mark, 3),
+    count_pieces(Line, '_', 1).
 
 % Helper: check if a given Mark is already winning in Board
 check_immediate_win(Board, Mark) :-
@@ -499,26 +553,51 @@ length4(L) :- length(L, 4).
 score_line(Line, Mark, Value) :-
     blank_mark(Blank),
     opponent_mark(Mark, Opp),
+    
+    % Compter les occurrences
     count_pieces(Line, Mark, Mine),
-    count_pieces(Line, Blank, Empties),
     count_pieces(Line, Opp, Theirs),
-    ( Mine=3, Empties=1 -> Value=100
-    ; Mine=2, Empties=2 -> Value=10
-    ; Mine=1, Empties=3 -> Value=1
-    ; otherwise -> Value=0
+    count_pieces(Line, Blank, Blanks),
+    
+    % Évaluation des menaces offensives
+    offensive_score(Mine, Blanks, Offensive),
+    
+    % Évaluation des menaces défensives
+    defensive_score(Theirs, Blanks, Defensive),
+    
+    % Calcul final avec équilibrage
+    Value is (Offensive * 2) - (Defensive * 1.5).
+
+% Stratégie offensive (nos propres opportunités)
+offensive_score(Mine, Blanks, Score) :-
+    ( Mine == 4 -> Score = 100000   % Victoire immédiate
+    ; Mine == 3, Blanks == 1 -> Score = 200  % Ligne gagnante potentielle
+    ; Mine == 2, Blanks == 2 -> Score = 20   % Bon départ
+    ; Mine == 1, Blanks == 3 -> Score = 2    % Potentiel lointain
+    ; Score = 0
     ).
 
-count_pieces(Line, X, Count) :-
-    include(=(X), Line, Matches),
+% Stratégie défensive (menaces adverses)
+defensive_score(Theirs, Blanks, Score) :-
+    ( Theirs == 4 -> Score = 100000  % Défaite imminente
+    ; Theirs == 3, Blanks == 1 -> Score = 1000 % Blocage urgent
+    ; Theirs == 2, Blanks == 2 -> Score = 30   % Attention
+    ; Theirs == 1, Blanks == 3 -> Score = 3    % Négligeable
+    ; Score = 0
+    ).
+
+% Comptage optimisé
+count_pieces(Line, Piece, Count) :-
+    include(==(Piece), Line, Matches),
     length(Matches, Count).
 
 % Extra center column preference
 evaluate_center(Board, Mark, Val) :-
     transpose_board(Board, TBoard),
-    nth1(4, TBoard, CenterCol),   % Column 4 is center in a 7-wide board
+    nth1(4, TBoard, CenterCol),  
     include(=(Mark), CenterCol, Hits),
     length(Hits, Count),
-    Val is Count * 3.
+    Val is Count * 1.5.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 13. Gathering 4-length lines: horizontal, vertical, diagonal
