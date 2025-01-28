@@ -1,32 +1,70 @@
-% Basic facts and utilities
-write_red(X) :- write('\e[31m'), write(X), write('\e[0m').
-write_yellow(X) :- write('\e[33m'), write(X), write('\e[0m').
+:- dynamic board/1.
+:- dynamic player/2.
+:- dynamic ai_strategy/1.   % <--- Pour stocker le choix de stratégie
 
-next_player(1, 2).
-next_player(2, 1).
-
-player_mark(1, 'R').
-player_mark(2, 'Y').
-
-opponent_mark('R', 'Y').
-opponent_mark('Y', 'R').
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 1. Basic Facts and Configuration
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 blank_mark('_').
 
-% Board constants
-board_height(6).
-board_width(7).
+% We have two marks: 'R' for Red, 'Y' for Yellow
+opponent_mark('R', 'Y').
+opponent_mark('Y', 'R').
 
-% Main program
+% Optionally, link player IDs to marks
+player_mark(1, 'R').
+player_mark(2, 'Y').
+
+% If you want to set a maximum search depth for minimax:
+max_depth(4).
+
+% Preferred column ordering for AI (used in find_winning_move/block and minimax):
+ordered_columns([4,3,5,2,6,1,7]).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 2. Main Entry Point
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 run :-
-    initialize,
-    nl, write('Welcome to Connect Four!'), nl,
+    choose_ai_strategy,         % <--- NOUVEAU : on demande la stratégie d’IA
+    initialize_board,
+    nl, write('Welcome to Connect 4!'), nl,
     read_players,
-    play(1).
+    play(1).   % Start with player 1
 
-% Board initialization
-initialize :-
+% Menu de choix de stratégie, avec 4 options
+choose_ai_strategy :-
+    nl, write('Choisissez la stratégie de l\'IA :'), nl,
+    write('1. IA défensive (seulement les menaces)\n'),
+    write('2. Contrôle du centre\n'),
+    write('3. Lines only (évaluation par lignes)\n'),
+    write('4. Combined (menaces + centre + lignes)\n'),
+    write('Votre choix (1,2,3,4) ? '),
+    read(Choice),
+    ( Choice = 1 ->
+        retractall(ai_strategy(_)),
+        asserta(ai_strategy(defensive))
+    ; Choice = 2 ->
+        retractall(ai_strategy(_)),
+        asserta(ai_strategy(center_control))
+    ; Choice = 3 ->
+        retractall(ai_strategy(_)),
+        asserta(ai_strategy(lines_only))
+    ; Choice = 4 ->
+        retractall(ai_strategy(_)),
+        asserta(ai_strategy(combined))
+    ; write('Choix invalide, réessayez.'), nl,
+      choose_ai_strategy
+    ).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 3. Board Initialization
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+initialize_board :-
     blank_mark(E),
+    % A standard 6 x 7 board:
     Board = [
         [E,E,E,E,E,E,E],
         [E,E,E,E,E,E,E],
@@ -37,301 +75,680 @@ initialize :-
     ],
     retractall(board(_)),
     asserta(board(Board)),
-    nl,
-    write('---------------------------------'), nl,
-    write('Board initialized'), nl.
 
-% Player configuration
+    nl, write('---------------------------------'), nl,
+    write('Board initialized.'), nl.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 4. Player Setup: Human or Computer
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 read_players :-
-    nl, write('Number of human players (0, 1, 2)? '),
+    nl, write('Number of human players (0, 1, or 2)? '),
     read(N),
-    set_players(N).
-
-set_players(0) :-
-    retractall(player(_,_)),
-    asserta(player(1, computer)),
-    asserta(player(2, computer)), !.
-
-set_players(1) :-
-    nl, write('Play with Red or Yellow (r/y)? '),
-    read(M),
-    human_playing(M), !.
-
-set_players(2) :-
-    retractall(player(_,_)),
-    asserta(player(1, human)),
-    asserta(player(2, human)), !.
-
-set_players(_) :-
-    nl,
-    write('Please enter 0, 1, or 2.'),
-    read_players.
-
-human_playing(r) :-
-    retractall(player(_,_)),
-    asserta(player(1, human)),
-    asserta(player(2, computer)), !.
-
-human_playing(y) :-
-    retractall(player(_,_)),
-    asserta(player(1, computer)),
-    asserta(player(2, human)), !.
-
-human_playing(_) :-
-    nl,
-    write('Please enter r or y.'),
-    set_players(1).
-
-% Board display
-display_board(Board) :-
-    nl,
-    write('  1 2 3 4 5 6 7'), nl,
-    display_rows(Board, 1).
-
-display_rows([], _).
-display_rows([Row|Rest], RowNum) :-
-    write(RowNum), write(' '),
-    display_row(Row),
-    nl,
-    NextRow is RowNum + 1,
-    display_rows(Rest, NextRow).
-
-display_row([]).
-display_row([Cell|Rest]) :-
-    display_cell(Cell),
-    write(' '),
-    display_row(Rest).
-
-display_cell('R') :- write_red('R').
-display_cell('Y') :- write_yellow('Y').
-display_cell(X) :- write(X).
-
-% Main game loop
-play(P) :-
-    board(B),
-    display_board(B),
-    make_move(P),
-    board(NewB),
-    (check_win(NewB, P) ->
-        display_board(NewB),
-        nl,
-        player_mark(P, Mark),
-        write('Player '), write(Mark), write(' wins!'),
-        nl,
-        ask_play_again(P)
-    ; board_full(NewB) ->
-        display_board(NewB),
-        nl,
-        write('Game is a draw!'),
-        nl,
-        ask_play_again(P)
-    ;
-        next_player(P, NextP),
-        play(NextP)
+    ( N = 0 -> set_zero_players
+    ; N = 1 -> set_one_player
+    ; N = 2 -> set_two_players
+    ; write('Please enter 0, 1, or 2.'), nl, read_players
     ).
 
-ask_play_again(P) :-
+set_zero_players :-
+    retractall(player(_,_)),
+    asserta(player(1, computer)),
+    asserta(player(2, computer)).
+
+set_one_player :-
+    nl, write('Play with Red or Yellow? (r/y) '),
+    read(Choice),
+    ( Choice = r ->
+        retractall(player(_,_)),
+        asserta(player(1, human)),     % Human is Red
+        asserta(player(2, computer))   % Computer is Yellow
+      ; Choice = y ->
+        retractall(player(_,_)),
+        asserta(player(1, computer)),
+        asserta(player(2, human))
+      ; write('Please enter r or y.'), nl, set_one_player
+    ).
+
+set_two_players :-
+    retractall(player(_,_)),
+    asserta(player(1, human)),
+    asserta(player(2, human)).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 5. Game Loop
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+play(PlayerID) :-
+    board(Board),
+    display_board(Board),
+    make_move(PlayerID),
+    board(NewBoard),
+    nl,
+    ( contains_any_mark(NewBoard) ->
+        ( check_win(NewBoard, PlayerID) ->
+            display_board(NewBoard),
+            nl, write('Player '), write(PlayerID), write(' wins!'), nl,
+            write('Play again? (y/n) '),
+            read(Answer),
+            ( Answer = y -> replay
+            ; true
+            )
+          ; board_full(NewBoard) ->
+            write('Game is a draw!'), nl,
+            display_board(NewBoard),
+            ask_play_again
+          ; next_player(PlayerID, Next),
+            play(Next)
+        )
+      ; next_player(PlayerID, Next),
+        play(Next)
+    ).
+
+% Helper to see if the board has any R or Y
+contains_any_mark(Board) :-
+    member(Row, Board),
+    member(Mark, Row),
+    Mark \= '_', !.
+
+% For toggling between players 1 and 2
+next_player(1, 2).
+next_player(2, 1).
+
+ask_play_again :-
     write('Play again? (y/n): '),
-    read(Answer),
-    (Answer = y ->
-        initialize,
-        read_players,
-        play(1)
-    ; Answer = n ->
-        write('Thanks for playing!'), nl
-    ;
-        write('Please enter y or n.'), nl,
-        ask_play_again(P)
+    read(Ans),
+    ( Ans = y -> replay
+    ; Ans = n -> write('Goodbye!'), nl
+    ; write('Please enter y or n.'), nl, ask_play_again
     ).
 
-% Move handling
-make_move(P) :-
-    player(P, Type),
-    player_mark(P, Mark),
-    nl,
-    write('---------------------------------'), nl,
-    (Type = human ->
-        write('Player '), write(Mark),
-        write(' (column 1-7): '),
+replay :-
+    initialize_board,
+    read_players,
+    play(1).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 6. Making Moves (Human vs. Computer)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+make_move(PlayerID) :-
+    player(PlayerID, Type),
+    player_mark(PlayerID, Mark),
+    nl, write('---------------------------------'), nl,
+    ( Type = human ->
+        write('Player '), write(Mark), write(' (1-7) '),
         read(Col),
         make_human_move(Col, Mark)
-    ;
+      ; % Computer
         write('Computer is thinking...'), nl,
-        choose_computer_move(Mark, Col),
-        make_computer_move(Col, Mark)
+        sleep(1),
+        choose_computer_move(Mark, BestCol),
+        make_computer_move(BestCol, Mark)
     ).
 
-% Move validation
-valid_move(Col) :-
-    integer(Col),
-    Col >= 1, Col =< 7,
-    board(B),
-    nth1(1, B, TopRow),
-    nth1(Col, TopRow, Cell),
-    blank_mark(E),
-    Cell = E.
-
+% Human tries to place in column `Col`
 make_human_move(Col, Mark) :-
-    (valid_move(Col) ->
-        board(B),
-        drop_piece(B, Col, Mark, NewBoard),
+    board(OldBoard),
+    ( valid_move(OldBoard, Col) ->
+        drop_piece(OldBoard, Col, Mark, NewBoard),
         retract(board(_)),
         asserta(board(NewBoard)),
         write('Human plays column '), write(Col), nl
-    ;
-        write('Invalid move. Try again.'), nl,
-        read(NewCol),
-        make_human_move(NewCol, Mark)
+      ; write('Invalid column. Try again.'), nl,
+        fail
     ).
 
 make_computer_move(Col, Mark) :-
-    board(B),
-    drop_piece(B, Col, Mark, NewBoard),
-    retract(board(_)),
-    asserta(board(NewBoard)),
-    write('Computer '), write(Mark), write(' plays column '), write(Col), nl.
-
-% Computer move selection
-choose_computer_move(Mark, BestCol) :-
-    board(Board),
-    findall(Col-Score, (
-        between(1, 7, Col),
-        valid_move(Col),
-        calculate_move_score(Board, Col, Mark, Score)
-    ), Moves),
-    keysort(Moves, SortedMoves),
-    reverse(SortedMoves, [(BestCol-_)|_]).
-
-% If no moves found, choose first valid move
-choose_computer_move(_, Col) :-
-    between(1, 7, Col),
-    valid_move(Col), !.
-
-% Calculate score for a move
-calculate_move_score(Board, Col, Mark, Score) :-
-    drop_piece(Board, Col, Mark, NewBoard),
-    evaluate_position(NewBoard, Mark, Score).
-
-% Position evaluation
-evaluate_position(Board, Mark, Score) :-
-    check_win_potential(Board, Mark, Score1),
-    opponent_mark(Mark, OppMark),
-    check_win_potential(Board, OppMark, Score2),
-    Score is Score1 - Score2.
-
-% Check win potential
-check_win_potential(Board, Mark, Score) :-
-    (check_win(Board, Mark) -> 
-        Score = 1000
-    ;
-        count_three_in_row(Board, Mark, Count),
-        Score = Count * 10
+    board(OldBoard),
+    ( valid_move(OldBoard, Col) ->
+        drop_piece(OldBoard, Col, Mark, NewBoard),
+        retract(board(_)),
+        asserta(board(NewBoard)),
+        write('Computer '), write(Mark), write(' plays column '), write(Col), nl
+      ; % fallback: pick next valid
+        between(1,7,Alt),
+        valid_move(OldBoard, Alt),
+        drop_piece(OldBoard, Alt, Mark, NB),
+        retract(board(_)),
+        asserta(board(NB)),
+        write('Computer '), write(Mark), write(' plays column '), write(Alt), nl
     ).
 
-% Count three in a row occurrences
-count_three_in_row(Board, Mark, Count) :-
-    findall(1, three_in_row(Board, Mark), List),
-    length(List, Count).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 7. Valid Move & Dropping Pieces
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% Check for three in a row
-three_in_row(Board, Mark) :-
-    (horizontal_three(Board, Mark);
-     vertical_three(Board, Mark);
-     diagonal_three(Board, Mark)).
+% valid_move(+Board, +Col) : top cell in that column must be blank
+valid_move(Board, Col) :-
+    integer(Col),
+    Col >= 1, Col =< 7,
+    nth1(1, Board, TopRow),
+    blank_mark(B),
+    nth1(Col, TopRow, B).  % top cell = '_'
 
-% Piece dropping
 drop_piece(Board, Col, Mark, NewBoard) :-
-    drop_piece_helper(Board, Col, Mark, 6, NewBoard).
+    drop_piece_helper(Board, Col, Mark, 6, NewBoard). % Commence à la rangée 6 (bas)
+
+drop_piece_helper(_, _, _, 0, _) :- !, fail. % Échec si colonne pleine
 
 drop_piece_helper(Board, Col, Mark, Row, NewBoard) :-
-    Row > 0,
-    nth1(Row, Board, CurrentRow),
-    nth1(Col, CurrentRow, Cell),
-    blank_mark(E),
-    (Cell = E ->
-        replace_nth(Board, Row, Col, Mark, NewBoard)
-    ;
-        NextRow is Row - 1,
-        drop_piece_helper(Board, Col, Mark, NextRow, NewBoard)
+    nth1(Row, Board, ThisRow),
+    nth1(Col, ThisRow, Cell),
+    blank_mark(B),
+    ( Cell = B -> 
+        replace_nth(Board, Row, Col, Mark, NewBoard) % Place en bas
+      ; R2 is Row - 1,
+        drop_piece_helper(Board, Col, Mark, R2, NewBoard) % Cherche au-dessus
     ).
 
-% List manipulation helpers
+% Helpers to replace row/col in nested lists
 replace_nth(Board, RowNum, ColNum, Mark, NewBoard) :-
-    nth1(RowNum, Board, Row),
-    replace_in_row(Row, ColNum, Mark, NewRow),
+    nth1(RowNum, Board, OldRow),
+    replace_in_row(OldRow, ColNum, Mark, NewRow),
     replace_row(Board, RowNum, NewRow, NewBoard).
 
-replace_in_row([_|Rest], 1, Mark, [Mark|Rest]) :- !.
-replace_in_row([H|Rest], N, Mark, [H|NewRest]) :-
-    N > 1,
-    N1 is N - 1,
-    replace_in_row(Rest, N1, Mark, NewRest).
+replace_in_row([_|T], 1, X, [X|T]) :- !.
+replace_in_row([H|T], N, X, [H|T2]) :-
+    N > 1, N2 is N-1,
+    replace_in_row(T, N2, X, T2).
 
-replace_row([_|Rest], 1, NewRow, [NewRow|Rest]) :- !.
-replace_row([H|Rest], N, NewRow, [H|NewRest]) :-
-    N > 1,
-    N1 is N - 1,
-    replace_row(Rest, N1, NewRow, NewRest).
+replace_row([_|R], 1, NewRow, [NewRow|R]) :- !.
+replace_row([H|R], N, NewRow, [H|R2]) :-
+    N > 1, N2 is N-1,
+    replace_row(R, N2, NewRow, R2).
 
-% Win checking
-check_win(Board, P) :-
-    player_mark(P, Mark),
-    (check_horizontal_win(Board, Mark);
-     check_vertical_win(Board, Mark);
-     check_diagonal_win(Board, Mark)).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 8. Display Board
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+display_board(Board) :-
+    nl, write('  1 2 3 4 5 6 7'), nl,
+    display_rows(Board, 1).
+
+display_rows([], _).
+display_rows([Row|Rows], N) :-
+    write(N), write(' '),
+    display_row(Row), nl,
+    N2 is N+1,
+    display_rows(Rows, N2).
+
+display_row([]).
+display_row([Cell|Rest]) :-
+    display_cell(Cell), write(' '),
+    display_row(Rest).
+
+display_cell('R') :- write('\e[31mR\e[0m').  % red
+display_cell('Y') :- write('\e[33mY\e[0m').  % yellow
+display_cell(X)   :- write(X).               % '_'
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 9. Check Win
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+check_win(Board, PlayerID) :-
+    player_mark(PlayerID, Mark),
+    ( 
+      check_horizontal_win(Board, Mark)
+      ; check_vertical_win(Board, Mark)
+      ; check_diagonal_win(Board, Mark)
+    ).
 
 check_horizontal_win(Board, Mark) :-
     member(Row, Board),
-    append(_, [Mark,Mark,Mark,Mark|_], Row).
+    four_consecutive(Row, Mark).
 
 check_vertical_win(Board, Mark) :-
-    transpose_board(Board, Transposed),
-    check_horizontal_win(Transposed, Mark).
+    transpose_board(Board, TBoard),
+    member(Col, TBoard),
+    four_consecutive(Col, Mark).
 
 check_diagonal_win(Board, Mark) :-
-    (diagonal_win_right(Board, Mark);
-     diagonal_win_left(Board, Mark)).
+    board_dimensions(Board, Rows, Cols),
+    between(1, Rows, Row),
+    between(1, Cols, Col),
+    (check_line(Board, Mark, Row, Col, 1, 1)   % Diagonale ↘
+    ; check_line(Board, Mark, Row, Col, -1, 1) % Diagonale ↗
+    ).
 
-diagonal_win_right(Board, Mark) :-
-    append(_, [Row1,Row2,Row3,Row4|_], Board),
-    append(Pre1, [Mark|_], Row1),
-    append(Pre2, [Mark|_], Row2),
-    append(Pre3, [Mark|_], Row3),
-    append(Pre4, [Mark|_], Row4),
-    length(Pre1, N1),
-    length(Pre2, N2),
-    length(Pre3, N3),
-    length(Pre4, N4),
-    N2 is N1 + 1,
-    N3 is N2 + 1,
-    N4 is N3 + 1.
+check_line(Board, Mark, Row, Col, DRow, DCol) :-
+    get_cell(Board, Row, Col, Mark),
+    R2 is Row + DRow, C2 is Col + DCol,
+    get_cell(Board, R2, C2, Mark),
+    R3 is R2 + DRow, C3 is C2 + DCol,
+    get_cell(Board, R3, C3, Mark),
+    R4 is R3 + DRow, C4 is C3 + DCol,
+    get_cell(Board, R4, C4, Mark).
 
-diagonal_win_left(Board, Mark) :-
-    append(_, [Row1,Row2,Row3,Row4|_], Board),
-    append(Pre1, [Mark|_], Row1),
-    append(Pre2, [Mark|_], Row2),
-    append(Pre3, [Mark|_], Row3),
-    append(Pre4, [Mark|_], Row4),
-    length(Pre1, N1),
-    length(Pre2, N2),
-    length(Pre3, N3),
-    length(Pre4, N4),
-    N2 is N1 - 1,
-    N3 is N2 - 1,
-    N4 is N3 - 1.
+diagonal_right(Board, Mark) :-
+    append(_, [R1,R2,R3,R4|_], Board),
+    append(P1,[Mark|_],R1),
+    append(P2,[Mark|_],R2),
+    append(P3,[Mark|_],R3),
+    append(P4,[Mark|_],R4),
+    length(P1,N1),
+    length(P2,N2), N2 is N1+1,
+    length(P3,N3), N3 is N2+1,
+    length(P4,N4), N4 is N3+1.
 
-% Board state checks
+diagonal_left(Board, Mark) :-
+    append(_, [R1,R2,R3,R4|_], Board),
+    append(P1,[Mark|_],R1),
+    append(P2,[Mark|_],R2),
+    append(P3,[Mark|_],R3),
+    append(P4,[Mark|_],R4),
+    length(P1,N1),
+    length(P2,N2), N2 is N1-1,
+    length(P3,N3), N3 is N2-1,
+    length(P4,N4), N4 is N3-1.
+
+four_consecutive(List, Mark) :-
+    append(_, [Mark,Mark,Mark,Mark|_], List).
+
 board_full(Board) :-
-    blank_mark(E),
-    \+ (member(Row, Board), member(E, Row)).
+    blank_mark(B),
+    \+ (member(Row, Board), member(B, Row)).
 
-% Board transposition
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 10. Blocking and Winning Move Checks
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Find an immediate winning move for Mark
+find_winning_move(Board, Mark, Col) :-
+    ordered_columns(Cols),
+    member(Col, Cols),
+    valid_move(Board, Col),
+    drop_piece(Board, Col, Mark, TempBoard),
+    player_mark(PID, Mark),  % We only need Mark to be known but ensure it belongs to some PID
+    check_win(TempBoard, PID),
+    !.
+
+% Find a move that blocks the opponent from an immediate win
+find_block_move(Board, OpponentMark, Col) :-
+    ordered_columns(Cols),
+    member(Col, Cols),
+    valid_move(Board, Col),
+    drop_piece(Board, Col, OpponentMark, TempBoard),
+    player_mark(OppID, OpponentMark),
+    check_win(TempBoard, OppID),
+    !.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 11. Minimax (Negamax) AI
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% choose_computer_move(+Mark, -BestCol)
+choose_computer_move(Mark, BestCol) :-
+    board(Board),
+    opponent_mark(Mark, OppMark),
+
+    % 1 Check if we (Mark) can win immediately:
+    ( find_winning_move(Board, Mark, WinCol) ->
+        BestCol = WinCol,
+        write('Computer goes for the WIN in column '), write(BestCol), nl
+
+    % 2 Otherwise, see if the opponent can win next turn, and block:
+    ; find_block_move(Board, OppMark, BlockCol) ->
+        BestCol = BlockCol,
+        write('Computer blocks opponent by playing column '), write(BlockCol), nl
+
+    % 3 If no immediate win or block needed, fall back to minimax:
+    ; max_depth(MaxD),
+      evaluate_columns(Board, Mark, [1,2,3,4,5,6,7], OrderedCols),
+      Alpha is -1000000,
+      Beta  is  1000000,
+      write('Starting minimax computation...'), nl,
+      minimax(Board, MaxD, Alpha, Beta, Mark, OrderedCols, BestCol, Score),
+      write('Selected column '), write(BestCol),
+      write(' with score '), write(Score), nl
+    ).
+
+% ==== zip/3 ==== (Combine deux listes en une liste de paires Score-Colonne)
+zip([], [], []).
+zip([S|Scores], [C|Cols], [(S,C)|Rest]) :- zip(Scores, Cols, Rest).
+
+% ==== pairs_values/2 ==== (Extrait les colonnes de la liste de paires)
+pairs_values([], []).
+pairs_values([(_Score, Col)|T], [Col|Rest]) :- pairs_values(T, Rest).
+
+% evaluate_columns/4
+% Simple tri des colonnes selon un "score potentiel" (Base + Threat)
+evaluate_columns(Board, Mark, Cols, OrderedCols) :-
+    maplist(column_potential(Board, Mark), Cols, Scores),
+    zip(Scores, Cols, Pairs),
+    sort(Pairs, Sorted),
+    reverse(Sorted, Descending),
+    pairs_values(Descending, OrderedCols).
+
+% column_potential/3
+% On donne un mini-score de base pour la centralité, plus un bonus
+% si la pose donne une victoire immédiate.
+column_potential(Board, Mark, Col, Score) :-
+    % Bonus central et adjacent
+    ( Col =:= 4 -> Base = 20 
+    ; (Col =:= 3 ; Col =:= 5) -> Base = 15 
+    ; (Col =:= 2 ; Col =:= 6) -> Base = 5
+    ; Base = 0 
+    ),
+    % Menaces immédiates (vict. directe)
+    ( valid_move(Board, Col),
+      drop_piece(Board, Col, Mark, TempBoard),
+      check_immediate_win(TempBoard, Mark) -> Threat = 50
+    ; Threat = 0
+    ),
+    Score is Base + Threat.
+
+% Petit coup de pouce : si le plateau est vide, jouer direct en colonne 4
+choose_computer_move(Mark, 4) :-
+    board(Board),
+    is_empty_board(Board),  % Vérifie si le plateau est vide
+    valid_move(Board, 4), !.
+
+is_empty_board(Board) :-
+    blank_mark(B),
+    forall(member(Row, Board), Row = [B,B,B,B,B,B,B]).
+
+% minimax(+Board, +Depth, +Alpha, +Beta, +Mark, +Cols, -BestCol, -BestScore)
+% Negamax approach with alpha-beta pruning
+minimax(Board, 0, _, _, Mark, _, -1, Score) :-
+    % Base case: no depth left => evaluate
+    evaluate_position(Board, Mark, Score), !.
+
+% If there are no columns left, fail case
+minimax(_, _, _, _, _, [], -1, -999999) :- !.
+
+minimax(Board, Depth, Alpha, Beta, Mark, [Col|RestCols], BestCol, BestScore) :-
+    ( make_move_temp(Board, Col, Mark, TempBoard) ->
+        D1 is Depth - 1,
+        opponent_mark(Mark, OppMark),
+        % Flip alpha and beta for negamax
+        minimax(TempBoard, D1, -Beta, -Alpha, OppMark, [4,3,5,2,6,1,7], _, ChildScore),
+        ThisScore is -ChildScore,
+
+        ( ThisScore > Beta ->
+            % Beta cutoff
+            BestScore = ThisScore,
+            BestCol   = Col
+        ; NewAlpha is max(Alpha, ThisScore),
+          % Recurse among the remaining columns
+          minimax(Board, Depth, NewAlpha, Beta, Mark, RestCols, TempC, TempS),
+          ( ThisScore > TempS ->
+                BestCol   = Col,
+                BestScore = ThisScore
+          ; BestCol   = TempC,
+            BestScore = TempS
+          )
+        )
+      ; % If we cannot make a move in Col, skip it
+        minimax(Board, Depth, Alpha, Beta, Mark, RestCols, BestCol, BestScore)
+    ).
+
+make_move_temp(Board, Col, Mark, NewBoard) :-
+    valid_move(Board, Col),
+    drop_piece(Board, Col, Mark, NewBoard).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 12. Position Evaluation
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% On dispatch selon la stratégie choisie, parmi :
+%   1) defensive
+%   2) center_control
+%   3) lines_only
+%   4) combined
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+evaluate_position(Board, Mark, Score) :-
+    ai_strategy(Strategy),             % On récupère la stratégie choisie
+    evaluate_position_strategy(Strategy, Board, Mark, Score).
+
+% Définit les 4 approches :
+
+% 1) IA défensive (seulement "threats")
+evaluate_position_strategy(defensive, Board, Mark, Score) :-
+    opponent_mark(Mark, OppMark),
+    ( check_immediate_win(Board, Mark) ->
+        Score = 100000      % Victoire garantie
+    ; check_immediate_win(Board, OppMark) ->
+        Score = -100000     % Défaite imminente
+    ; 
+        evaluate_threats(Board, Mark, ThreatScore),
+        Score is ThreatScore
+    ).
+
+% 2) Contrôle du centre
+evaluate_position_strategy(center_control, Board, Mark, Score) :-
+    opponent_mark(Mark, OppMark),
+    ( check_immediate_win(Board, Mark) ->
+        Score = 100000
+    ; check_immediate_win(Board, OppMark) ->
+        Score = -100000
+    ;
+        evaluate_center(Board, Mark, CenterVal),
+        % On peut moduler le coefficient (ex. x10)
+        Score is CenterVal * 10
+    ).
+
+% 3) Lines only (on compte nos lignes et celles de l’adversaire)
+evaluate_position_strategy(lines_only, Board, Mark, Score) :-
+    opponent_mark(Mark, OppMark),
+    ( check_immediate_win(Board, Mark) ->
+        Score = 100000
+    ; check_immediate_win(Board, OppMark) ->
+        Score = -100000
+    ;
+        evaluate_lines(Board, Mark, MyLines),
+        evaluate_lines(Board, OppMark, TheirLines),
+        Score is MyLines - TheirLines
+    ).
+
+% 4) Combined (menaces + lignes + centre)
+evaluate_position_strategy(combined, Board, Mark, Score) :-
+    opponent_mark(Mark, OppMark),
+    ( check_immediate_win(Board, Mark) -> 
+        Score = 100000  
+    ; check_immediate_win(Board, OppMark) -> 
+        Score = -100000 
+    ; 
+        evaluate_threats(Board, Mark, ThreatScore),
+        evaluate_lines(Board, Mark, MyLines),
+        evaluate_lines(Board, OppMark, TheirLines),
+        evaluate_center(Board, Mark, CenterVal),
+        
+        % Pondération des composantes
+        % Ex : on additionne tout avec quelques coefficients de pondération
+        WeightedThreat = ThreatScore,
+        WeightedLines  = MyLines - TheirLines,
+        WeightedCenter = CenterVal * 3, 
+        
+        Score0 is WeightedThreat + WeightedLines + WeightedCenter,
+
+        % Clip final pour éviter des scores trop énormes
+        ( Score0 > 10000  -> Score = 10000
+        ; Score0 < -10000 -> Score = -10000
+        ; Score = Score0
+        )
+    ).
+
+% Vérifie si un Mark a un alignement gagnant "tout de suite"
+check_immediate_win(Board, Mark) :-
+    player_mark(PID, Mark),
+    check_win(Board, PID).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 13. Évaluation des menaces + lignes + centre
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% ---- Menaces (Threats) ----
+
+evaluate_threats(Board, Mark, Score) :-
+    findall(
+        Threat,
+        ( between(1,7,Col),
+          valid_move(Board, Col),
+          drop_piece(Board, Col, Mark, NewBoard),
+          threat_value(NewBoard, Mark, Threat)
+        ),
+        ThreatList
+    ),
+    sum_list(ThreatList, Score).
+
+% Simple : si la pose dans Col crée une situation avec potentiellement
+% 3 pions alignés + 1 trou => menace
+threat_value(NewBoard, Mark, Value) :-
+    ( has_potential_win(NewBoard, Mark) -> Value = 50
+    ; Value = 0
+    ).
+
+has_potential_win(Board, Mark) :-
+    ( get_horizontal_line(Board, Line)
+    ; get_vertical_line(Board, Line)
+    ; get_diagonal_line(Board, Line)
+    ),
+    potential_three(Line, Mark).
+
+potential_three(Line, Mark) :-
+    count_pieces(Line, Mark, 3),
+    count_pieces(Line, '_', 1).
+
+% ---- Évaluation des lignes (utilisée par lines_only & combined) ----
+
+evaluate_lines(Board, Mark, TotalScore) :-
+    findall(Line,
+        ( get_horizontal_line(Board, Line)
+        ; get_vertical_line(Board, Line)
+        ; get_diagonal_line(Board, Line)
+        ),
+        RawLines),
+    % Ne prendre que les sous-lignes de longueur 4
+    include(length4, RawLines, FourLines),
+    findall(V, (member(L, FourLines), score_line(L, Mark, V)), Scores),
+    sum_list(Scores, TotalScore).
+
+length4(L) :- length(L, 4).
+
+score_line(Line, Mark, Value) :-
+    blank_mark(Blank),
+    opponent_mark(Mark, Opp),
+    
+    count_pieces(Line, Mark, Mine),
+    count_pieces(Line, Opp, Theirs),
+    count_pieces(Line, Blank, Blanks),
+    
+    offensive_score(Mine, Blanks, Offensive),
+    defensive_score(Theirs, Blanks, Defensive),
+    
+    % Pondération par défaut (2 pour l'offensive, 1.5 pour la défensive)
+    Value is (Offensive * 2) - (Defensive * 1.5).
+
+offensive_score(Mine, Blanks, Score) :-
+    ( Mine == 4 -> Score = 100000   % Alignement déjà complet
+    ; Mine == 3, Blanks == 1 -> Score = 200
+    ; Mine == 2, Blanks == 2 -> Score = 20
+    ; Mine == 1, Blanks == 3 -> Score = 2
+    ; Score = 0
+    ).
+
+defensive_score(Theirs, Blanks, Score) :-
+    ( Theirs == 4 -> Score = 100000
+    ; Theirs == 3, Blanks == 1 -> Score = 1000
+    ; Theirs == 2, Blanks == 2 -> Score = 30
+    ; Theirs == 1, Blanks == 3 -> Score = 3
+    ; Score = 0
+    ).
+
+count_pieces(Line, Piece, Count) :-
+    include(==(Piece), Line, Matches),
+    length(Matches, Count).
+
+% ---- Évaluation du centre ----
+
+evaluate_center(Board, Mark, Val) :-
+    transpose_board(Board, TBoard),
+    nth1(4, TBoard, CenterCol),  
+    include(=(Mark), CenterCol, Hits),
+    length(Hits, Count),
+    Val is Count * 1.5.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 14. Récupération des lignes horizontales, verticales, diagonales
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+get_horizontal_line(Board, Subline) :-
+    member(Row, Board),
+    sliding_window(Row, 4, Subline).
+
+get_vertical_line(Board, Subline) :-
+    transpose_board(Board, TBoard),
+    get_horizontal_line(TBoard, Subline).
+
+get_diagonal_line(Board, Subline) :-
+    all_diagonals(Board, AllDiags),
+    member(Diag, AllDiags),
+    sliding_window(Diag, 4, Subline).
+
+sliding_window(List, Size, Window) :-
+    length(Window, Size),
+    append(_, Window, List),
+    append(Window, _, _).
+
+all_diagonals(Board, All) :-
+    findall(D1, diag_down_right(Board, D1), DRs),
+    findall(D2, diag_up_right(Board, D2), URs),
+    append(DRs, URs, All).
+
+diag_down_right(Board, Diag) :-
+    board_dimensions(Board, MaxR, MaxC),
+    between(1, MaxR, Row),
+    between(1, MaxC, Col),
+    build_down_right(Board, Row, Col, Diag).
+
+build_down_right(Board, R, C, [Cell|Rest]) :-
+    get_cell(Board, R, C, Cell),
+    R2 is R+1, C2 is C+1,
+    build_down_right(Board, R2, C2, Rest).
+build_down_right(_, R, C, []) :-
+    \+ get_cell(_, R, C, _).
+
+diag_up_right(Board, Diag) :-
+    board_dimensions(Board, MaxR, MaxC),
+    between(1, MaxR, Row),
+    between(1, MaxC, Col),
+    build_up_right(Board, Row, Col, Diag).
+
+build_up_right(Board, R, C, [Cell|Rest]) :-
+    get_cell(Board, R, C, Cell),
+    R2 is R-1, C2 is C+1,
+    build_up_right(Board, R2, C2, Rest).
+build_up_right(_, R, C, []) :-
+    \+ get_cell(_, R, C, _).
+
+board_dimensions(Board, Rows, Cols) :-
+    length(Board, Rows),
+    Board = [FirstRow|_],
+    length(FirstRow, Cols).
+
+get_cell(Board, Row, Col, Cell) :-
+    Row > 0, Col > 0,
+    nth1(Row, Board, RowList),
+    nth1(Col, RowList, Cell).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 15. transpose_board/2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 transpose_board([], []).
 transpose_board([[]|_], []).
-transpose_board(Matrix, [Col|Cols]) :-
-    transpose_col(Matrix, Col, Rest),
-    transpose_board(Rest, Cols).
+transpose_board([Row|Rows], [Col|Cols]) :-
+    transpose_col([Row|Rows], Col, Remainder),
+    transpose_board(Remainder, Cols).
 
 transpose_col([], [], []).
-transpose_col([[H|T]|Rows], [H|Cols], [T|Rest]) :-
-    transpose_col(Rows, Cols, Rest).
+transpose_col([[H|T]|Rest], [H|Hs], [T|Ts]) :-
+    transpose_col(Rest, Hs, Ts).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% End of File
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
