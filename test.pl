@@ -238,7 +238,7 @@ replace_row([H|R], N, NewRow, [H|R2]) :-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 display_board(Board) :-
-    nl, write('  1 2 3 4 5 6 7'), nl,
+    nl, write('  1  2 3 4 5  6 7'), nl,
     display_rows(Board, 1).
 
 display_rows([], _).
@@ -492,6 +492,71 @@ evaluate_position(Board, Mark, Score) :-
         ; true)
     ).
 
+evaluate_position_center(Board, Mark, Score) :-
+    opponent_mark(Mark, OppMark),
+    ( check_immediate_win(Board, Mark) -> 
+        Score = 100000  % Victoire garantie
+    ; check_immediate_win(Board, OppMark) -> 
+        Score = -100000 % Défaite imminente
+    ; 
+        % Évaluation stratégique
+        evaluate_center(Board, Mark, CenterVal),
+        
+        % Pondération des composantes
+        WeightedCenter = CenterVal * 3, 
+        
+        % Calcul final avec coefficients équilibrés
+        Score is WeightedCenter,
+        
+        % Sécurité numérique
+        (Score > 10000 -> Score = 10000
+        ; Score < -10000 -> Score = -10000
+        ; true)
+    ).
+
+evaluate_position_threat(Board, Mark, Score) :-
+    opponent_mark(Mark, OppMark),
+    ( check_immediate_win(Board, Mark) -> 
+        Score = 100000  % Victoire garantie
+    ; check_immediate_win(Board, OppMark) -> 
+        Score = -100000 % Défaite imminente
+    ; 
+        % Évaluation stratégique
+        evaluate_threats(Board, Mark, ThreatScore),
+        
+        % Calcul final avec coefficients équilibrés
+        Score is ThreatScore,
+        
+        % Sécurité numérique
+        (Score > 10000 -> Score = 10000
+        ; Score < -10000 -> Score = -10000
+        ; true)
+    ).
+
+evaluate_position_lines(Board, Mark, Score) :-
+    opponent_mark(Mark, OppMark),
+    ( check_immediate_win(Board, Mark) -> 
+        Score = 100000  % Victoire garantie
+    ; check_immediate_win(Board, OppMark) -> 
+        Score = -100000 % Défaite imminente
+    ; 
+        % Évaluation stratégique
+        evaluate_lines(Board, Mark, MyLines),
+        evaluate_lines(Board, OppMark, TheirLines),
+        
+        % Pondération des composantes
+        WeightedMyLines = MyLines,       
+        WeightedTheirLines = TheirLines, 
+        
+        % Calcul final avec coefficients équilibrés
+        Score is WeightedMyLines - WeightedTheirLines,
+        
+        % Sécurité numérique
+        (Score > 10000 -> Score = 10000
+        ; Score < -10000 -> Score = -10000
+        ; true)
+    ).
+
 % Détecte les colonnes créant deux menaces gagnantes
 evaluate_threats(Board, Mark, Score) :-
     findall(
@@ -594,10 +659,19 @@ count_pieces(Line, Piece, Count) :-
 % Extra center column preference
 evaluate_center(Board, Mark, Val) :-
     transpose_board(Board, TBoard),
-    nth1(4, TBoard, CenterCol),  
-    include(=(Mark), CenterCol, Hits),
-    length(Hits, Count),
-    Val is Count * 1.5.
+    length(TBoard, NumCols),  % Nombre total de colonnes
+    Center is (NumCols + 1) // 2,  % Indice de la colonne centrale (arrondi)
+    findall(Score, 
+        (
+            nth1(ColIndex, TBoard, Column),       % Parcourir chaque colonne
+            include(=(Mark), Column, Hits),      % Compter les pièces du joueur dans cette colonne
+            length(Hits, Count),                 % Calculer combien de pièces appartiennent au joueur
+            Distance is abs(Center - ColIndex),  % Distance par rapport à la colonne centrale
+            Weight is max(1, 4 - Distance),      % Pondération (plus proche = plus grand poids)
+            Score is Count * Weight              % Calculer le score pour cette colonne
+        ),
+        Scores),
+    sum_list(Scores, Val).  % Somme des scores des colonnes.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 13. Gathering 4-length lines: horizontal, vertical, diagonal
