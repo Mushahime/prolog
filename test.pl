@@ -1,5 +1,6 @@
 :- dynamic board/1.
 :- dynamic player/2.
+:- dynamic current_eval_function/1.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 1. Basic Facts and Configuration
@@ -16,7 +17,7 @@ player_mark(1, 'R').
 player_mark(2, 'Y').
 
 % If you want to set a maximum search depth for minimax:
-max_depth(4).
+max_depth(6).
 
 % Preferred column ordering for AI (used in find_winning_move/block and minimax):
 ordered_columns([4,3,5,2,6,1,7]).
@@ -28,6 +29,8 @@ ordered_columns([4,3,5,2,6,1,7]).
 run :-
     initialize_board,
     nl, write('Welcome to Connect 4!'), nl,
+    select_evaluation_function(EvalFunction), % Sélection de la fonction d évaluation
+    asserta(current_eval_function(EvalFunction)), % Stocker la fonction choisie
     read_players,
     play(1).   % Start with player 1
 
@@ -88,6 +91,24 @@ set_two_players :-
     retractall(player(_,_)),
     asserta(player(1, human)),
     asserta(player(2, human)).
+
+% Menu pour sélectionner la fonction d'évaluation
+select_evaluation_function(Function) :-
+    nl, write('Choisissez la fonction d\'evaluation pour l\'IA :'), nl,
+    write('1. evaluate_position (par defaut)'), nl,
+    write('2. evaluate_position_center (centre)'), nl,
+    write('3. evaluate_position_threat (menaces)'), nl,
+    write('4. evaluate_position_lines (lignes)'), nl,
+    read(Choice),
+    ( Choice = 1 -> Function = evaluate_position
+    ; Choice = 2 -> Function = evaluate_position_center
+    ; Choice = 3 -> Function = evaluate_position_threat
+    ; Choice = 4 -> Function = evaluate_position_lines
+    ; write('Choix invalide. Utilisation de evaluate_position par defaut.'), nl,
+      Function = evaluate_position
+    ).
+
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 5. Game Loop
@@ -238,7 +259,7 @@ replace_row([H|R], N, NewRow, [H|R2]) :-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 display_board(Board) :-
-    nl, write('  1  2 3 4 5  6 7'), nl,
+    nl, write('  1 2 3 4 5 6 7'), nl,
     display_rows(Board, 1).
 
 display_rows([], _).
@@ -356,6 +377,7 @@ find_block_move(Board, OpponentMark, Col) :-
 choose_computer_move(Mark, BestCol) :-
     board(Board),
     opponent_mark(Mark, OppMark),
+    current_eval_function(EvalFunction), % Récupérer la fonction d évaluation choisie
 
     % 1 Check if we (Mark) can win immediately:
     ( find_winning_move(Board, Mark, WinCol) ->
@@ -373,7 +395,7 @@ choose_computer_move(Mark, BestCol) :-
       Alpha is -1000000,
       Beta  is  1000000,
       write('Starting minimax computation...'), nl,
-      minimax(Board, MaxD, Alpha, Beta, Mark, OrderedCols, BestCol, Score),
+      minimax(Board, MaxD, Alpha, Beta, Mark, OrderedCols, BestCol, Score, EvalFunction), % Passer la fonction d évaluation
       write('Selected column '), write(BestCol),
       write(' with score '), write(Score), nl
     ).
@@ -422,19 +444,18 @@ is_empty_board(Board) :-
 
 % minimax(+Board, +Depth, +Alpha, +Beta, +Mark, +Cols, -BestCol, -BestScore)
 % Negamax approach with alpha-beta pruning
-minimax(Board, 0, _, _, Mark, _, -1, Score) :-
+minimax(Board, 0, _, _, Mark, _, -1, Score, EvalFunction) :-
     % Base case: no depth left => evaluate
-    evaluate_position(Board, Mark, Score), !.
+    call(EvalFunction, Board, Mark, Score), !. % Utiliser la fonction d évaluation choisie
 
-% If there are no columns left, fail case
-minimax(_, _, _, _, _, [], -1, -999999) :- !.
+minimax(_, _, _, _, _, [], -1, -999999, _) :- !.
 
-minimax(Board, Depth, Alpha, Beta, Mark, [Col|RestCols], BestCol, BestScore) :-
+minimax(Board, Depth, Alpha, Beta, Mark, [Col|RestCols], BestCol, BestScore, EvalFunction) :-
     ( make_move_temp(Board, Col, Mark, TempBoard) ->
         D1 is Depth - 1,
         opponent_mark(Mark, OppMark),
         % Flip alpha and beta for negamax
-        minimax(TempBoard, D1, -Beta, -Alpha, OppMark, [4,3,5,2,6,1,7], _, ChildScore),
+        minimax(TempBoard, D1, -Beta, -Alpha, OppMark, [4,3,5,2,6,1,7], _, ChildScore, EvalFunction),
         ThisScore is -ChildScore,
 
         ( ThisScore > Beta ->
@@ -443,7 +464,7 @@ minimax(Board, Depth, Alpha, Beta, Mark, [Col|RestCols], BestCol, BestScore) :-
             BestCol   = Col
         ; NewAlpha is max(Alpha, ThisScore),
           % Recurse among the remaining columns
-          minimax(Board, Depth, NewAlpha, Beta, Mark, RestCols, TempC, TempS),
+          minimax(Board, Depth, NewAlpha, Beta, Mark, RestCols, TempC, TempS, EvalFunction),
           ( ThisScore > TempS ->
                 BestCol   = Col,
                 BestScore = ThisScore
@@ -452,7 +473,7 @@ minimax(Board, Depth, Alpha, Beta, Mark, [Col|RestCols], BestCol, BestScore) :-
           )
         )
       ; % If we cannot make a move in Col, skip it
-        minimax(Board, Depth, Alpha, Beta, Mark, RestCols, BestCol, BestScore)
+        minimax(Board, Depth, Alpha, Beta, Mark, RestCols, BestCol, BestScore, EvalFunction)
     ).
 
 % A helper to "simulate" making a move, returning the new board,
@@ -663,7 +684,7 @@ evaluate_center(Board, Mark, Val) :-
     Center is (NumCols + 1) // 2,  % Indice de la colonne centrale (arrondi)
     findall(Score, 
         (
-            nth1(ColIndex, TBoard, Column),       % Parcourir chaque colonne
+            nth1(ColIndex, TBoard, Column),      % Parcourir chaque colonne
             include(=(Mark), Column, Hits),      % Compter les pièces du joueur dans cette colonne
             length(Hits, Count),                 % Calculer combien de pièces appartiennent au joueur
             Distance is abs(Center - ColIndex),  % Distance par rapport à la colonne centrale
