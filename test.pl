@@ -99,11 +99,13 @@ select_evaluation_function(Function) :-
     write('2. evaluate_position_center (centre)'), nl,
     write('3. evaluate_position_threat (menaces)'), nl,
     write('4. evaluate_position_lines (lignes)'), nl,
+    write('5. random (aleatoire)'), nl,
     read(Choice),
     ( Choice = 1 -> Function = evaluate_position
     ; Choice = 2 -> Function = evaluate_position_center
     ; Choice = 3 -> Function = evaluate_position_threat
     ; Choice = 4 -> Function = evaluate_position_lines
+    ; Choice = 5 -> Function = evaluate_position_random
     ; write('Choix invalide. Utilisation de evaluate_position par defaut.'), nl,
       Function = evaluate_position
     ).
@@ -376,9 +378,17 @@ find_block_move(Board, OpponentMark, Col) :-
 % choose_computer_move(+Mark, -BestCol)
 choose_computer_move(Mark, BestCol) :-
     board(Board),
-    opponent_mark(Mark, OppMark),
     current_eval_function(EvalFunction), % Récupérer la fonction d évaluation choisie
 
+    (EvalFunction = evaluate_position_random ->
+        repeat,
+        random(1, 8, Col),  % Génère un nombre entre 1 et 7
+        (valid_move(Board, Col) -> 
+            BestCol = Col, !  % Si le coup est valide, on le garde
+        ; fail)  % Sinon on recommence
+    ;
+
+    opponent_mark(Mark, OppMark),
     % 1 Check if we (Mark) can win immediately:
     ( find_winning_move(Board, Mark, WinCol) ->
         BestCol = WinCol,
@@ -398,7 +408,7 @@ choose_computer_move(Mark, BestCol) :-
       minimax(Board, MaxD, Alpha, Beta, Mark, OrderedCols, BestCol, Score, EvalFunction), % Passer la fonction d évaluation
       write('Selected column '), write(BestCol),
       write(' with score '), write(Score), nl
-    ).
+    )).
 
 % ==== zip/3 ==== (Combine deux listes en une liste de paires Score-Colonne)
 zip([], [], []).
